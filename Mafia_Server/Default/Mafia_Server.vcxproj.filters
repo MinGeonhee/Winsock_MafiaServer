@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="소스 파일\00. Main">
+      <UniqueIdentifier>{b93bdc0f-eaad-443e-b710-1141ff632bd3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\02. Logic">
+      <UniqueIdentifier>{fe12d528-7d97-49be-a51e-12c88fbbb97c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\Pch">
+      <UniqueIdentifier>{dc823abd-df05-467b-8f5f-4e34c9c6a481}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core">
+      <UniqueIdentifier>{20d9cf15-3337-4b88-904e-95a36f143e1b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\Server">
+      <UniqueIdentifier>{9058a71b-5689-4fee-9f37-098bd647549b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\Client">
+      <UniqueIdentifier>{560d44f7-deb6-476c-9e7d-a274d12f0959}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\02. Logic\00. GameManager">
+      <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\Struct">
+      <UniqueIdentifier>{fc1218fc-10a0-4796-af6f-fd0b861082db}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Private\pch.cpp">
+      <Filter>헤더 파일\Pch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CServer.cpp">
+      <Filter>소스 파일\01. Core\Server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CClient.cpp">
+      <Filter>소스 파일\01. Core\Client</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CGameManager.cpp">
+      <Filter>소스 파일\02. Logic\00. GameManager</Filter>
+    </ClCompile>
+    <ClCompile Include="Mafia_Server.cpp">
+      <Filter>소스 파일\00. Main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\Struct.cpp">
+      <Filter>헤더 파일\Struct</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Public\pch.h">
+      <Filter>헤더 파일\Pch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CServer.h">
+      <Filter>소스 파일\01. Core\Server</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CClient.h">
+      <Filter>소스 파일\01. Core\Client</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CGameManager.h">
+      <Filter>소스 파일\02. Logic\00. GameManager</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\Struct.h">
+      <Filter>헤더 파일\Struct</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
