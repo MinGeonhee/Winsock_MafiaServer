@@ -26,7 +26,7 @@ namespace Net
 	};
 
 
-	enum SERVER_EVENT_TYPE
+	enum class SERVER_EVENT_TYPE
 	{
 		Connect = 0,		/* Connect 요청 */
 		Receive_Packet = 1, /* 패킷 받기 */
