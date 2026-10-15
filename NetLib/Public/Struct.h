@@ -2,6 +2,30 @@
 
 namespace Net
 {
+	class CSocket;
+	class CAddress;
+
+	/* Server Event 최상위 구조체 */
+	struct Event
+	{
+		/* Event Type */
+		SERVER_EVENT_TYPE eEventType{ SERVER_EVENT_TYPE::END };
+
+		/* Connect 요청 전용 */
+		std::unique_ptr <Net::CSocket> pSocket{ nullptr };
+		std::unique_ptr<Net::CAddress>  pAddress{ nullptr };
+
+		/* Receive , Send Packet , DisConnect */
+		ClientKey	iSenderKey{ NONE_CLIENTKEY };
+		ClientKey	iReceiverKey{ NONE_CLIENTKEY };
+
+		/* Receive , Send Packet Char형태의 데이터로 담아두기 */
+		std::vector<char>  vecPacket{};
+	};
+
+
+
+
 	/* 앞쪽 4바이트 읽는 용도 */
 #pragma pack(push, 1)
 	struct PacketHeader
@@ -33,11 +57,8 @@ namespace Net
 		}
 	};
 
-	/* 임시용 */
-	struct Chat
-	{
-		char szMsg[256];
-	};
+
+
 
 #pragma pack(pop)
 

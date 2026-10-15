@@ -131,8 +131,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Private\CClient.cpp" />
-    <ClCompile Include="..\Private\CServer.cpp" />
     <ClCompile Include="..\Private\CGameManager.cpp" />
     <ClCompile Include="..\Private\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -143,8 +141,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ConsoleUI\ConsoleUI.h" />
-    <ClInclude Include="..\Public\CClient.h" />
-    <ClInclude Include="..\Public\CServer.h" />
     <ClInclude Include="..\Public\CGameManager.h" />
     <ClInclude Include="..\Public\pch.h" />
     <ClInclude Include="..\Public\Struct.h" />

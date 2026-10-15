@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cwctype>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -62,8 +63,9 @@ namespace ConsoleUI
 	}
 
 	/* 쌓여 있는 키 입력만 꺼냄. 없으면 바로 반환해서 게임 루프가 멈추지 않음
-	   누르고 있는 동안 들어오는 자동 반복은 무시 → 한 번 누르면 한 번만 반환 (Key Down 순간만) */
-	inline std::vector<KEY_EVENT_RECORD> Poll_Keys()
+	   기본: 누르고 있는 동안 들어오는 자동 반복은 무시 → 한 번 누르면 한 번만 반환 (Key Down 순간만)
+	   isAllowRepeat = true : 글자 입력용. 누르고 있으면 계속 반환 (Backspace 꾹 누르기 등) */
+	inline std::vector<KEY_EVENT_RECORD> Poll_Keys(bool isAllowRepeat = false)
 	{
 		static bool s_isHeld[256]{};	// 가상 키 코드별로 지금 눌려 있는지
 		std::vector<KEY_EVENT_RECORD> vecKeys;
@@ -85,8 +87,8 @@ namespace ConsoleUI
 			const KEY_EVENT_RECORD& tKey = tRecords[i].Event.KeyEvent;
 			bool& isHeld = s_isHeld[tKey.wVirtualKeyCode & 0xFF];
 
-			if (tKey.bKeyDown && isHeld == false)
-				vecKeys.push_back(tKey);	// 떼어져 있다가 막 눌린 순간만
+			if (tKey.bKeyDown && (isHeld == false || isAllowRepeat))
+				vecKeys.push_back(tKey);	// 떼어져 있다가 막 눌린 순간만 (isAllowRepeat면 반복 포함)
 			isHeld = (tKey.bKeyDown != FALSE);
 		}
 		return vecKeys;
@@ -381,5 +383,355 @@ namespace ConsoleUI
 
 			strMsg = L"'" + strInput + L"' 은(는) 사용할 수 없습니다. 1024 ~ 65535 사이 숫자를 입력하세요.";
 		}
+	}
+
+	/* ============================================================
+	   클라이언트 화면 : 인트로 / 로그인 / 로비
+	   ============================================================ */
+
+	/* 순수 문자열(색 코드 없음)의 화면 칸 수 */
+	inline int Width(const std::wstring& str)
+	{
+		int iWidth{ 0 };
+		for (size_t i = 0; i < str.size(); ++i)
+		{
+			char32_t c = str[i];
+			if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.size())
+			{
+				c = 0x10000 + ((c - 0xD800) << 10) + (str[i + 1] - 0xDC00);
+				++i;
+			}
+			iWidth += Char_Width(c);
+		}
+		return iWidth;
+	}
+
+	inline std::wstring Spaces(int iCount) { return std::wstring(static_cast<size_t>((std::max)(0, iCount)), L' '); }
+
+	inline void Get_ConsoleSize(int& iCols, int& iRows)
+	{
+		CONSOLE_SCREEN_BUFFER_INFO tInfo{};
+		GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &tInfo);
+		iCols = tInfo.srWindow.Right - tInfo.srWindow.Left + 1;
+		iRows = tInfo.srWindow.Bottom - tInfo.srWindow.Top + 1;
+	}
+
+	/* 가운데 정렬용 왼쪽 여백 (strPlain: 색 코드 없는 문자열) */
+	inline std::wstring Center_Pad(const std::wstring& strPlain, int iCols)
+	{
+		return Spaces((iCols - Width(strPlain)) / 2);
+	}
+
+	/* ---------------- MAFIA 로고 (38칸 × 6줄) ---------------- */
+	namespace Detail
+	{
+		inline const wchar_t* const LOGO[6] = {
+			L"███╗   ███╗ █████╗ ███████╗██╗ █████╗ ",
+			L"████╗ ████║██╔══██╗██╔════╝██║██╔══██╗",
+			L"██╔████╔██║███████║█████╗  ██║███████║",
+			L"██║╚██╔╝██║██╔══██║██╔══╝  ██║██╔══██║",
+			L"██║ ╚═╝ ██║██║  ██║██║     ██║██║  ██║",
+			L"╚═╝     ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝" };
+		constexpr int LOGO_W = 38;
+		inline const wchar_t* const SHADOW = L"\x1b[22;38;2;90;18;24m";	// 어두운 빨강 (선 부분)
+		inline const wchar_t* const BLOCK  = L"\x1b[1;91m";					// 밝은 빨강 굵게 (█ 부분)
+		inline const wchar_t* const SELECT = L"\x1b[48;2;110;30;36;97m";	// 선택된 줄 / 버튼 배경
+		inline const wchar_t* const FIELD  = L"\x1b[48;5;237m";				// 입력 칸 배경
+		inline const wchar_t* const CURSOR = L"\x1b[7m";					// 반전 (커서)
+	}
+
+	/* 로고 한 줄 (색 코드 포함, 38칸) */
+	inline std::wstring Logo_Line(int iRow)
+	{
+		std::wstring str;
+		int iMode = -1;		// 0 = 블록, 1 = 선, 2 = 공백 : 바뀔 때만 색 코드를 넣음
+		for (const wchar_t* p = Detail::LOGO[iRow]; *p; ++p)
+		{
+			const int iNext = (*p == L'█') ? 0 : (*p == L' ') ? 2 : 1;
+			if (iNext != iMode && iNext != 2)
+				str += (iNext == 0) ? Detail::BLOCK : Detail::SHADOW;
+			if (iNext != 2) iMode = iNext;
+			str += *p;
+		}
+		return str + Color::Reset;
+	}
+
+	/* ---------------- 인트로 ---------------- */
+	/* 로고 한 줄씩 → 칼 선 → 문구 타이핑 → '아무 키나 눌러 시작' 깜빡임. 키를 누르면 반환 */
+	inline void Play_Intro()
+	{
+		using namespace Color;
+		const std::wstring strSub = L"밤이 되었습니다. 마피아는 고개를 들어주세요.";
+		const std::wstring strPrompt = L"▶ 아무 키나 눌러 시작";
+
+		auto Draw = [&](int iLogoRows, int iBarLen, size_t iSubLen, bool isPrompt)
+		{
+			int iCols{ 0 }, iRows{ 0 };
+			Get_ConsoleSize(iCols, iRows);
+			const std::wstring strLeft = Spaces((iCols - Detail::LOGO_W) / 2);
+			const int iTop = (std::max)(1, (iRows - 16) / 2);
+
+			std::wstring str = L"\x1b[H";
+			for (int i = 0; i < iTop; ++i) str += L"\x1b[K\n";
+			for (int i = 0; i < 6; ++i)
+				str += (i < iLogoRows ? strLeft + Logo_Line(i) : L"") + L"\x1b[K\n";
+			str += L"\x1b[K\n";
+
+			str += strLeft; str += Red; str += std::wstring(static_cast<size_t>(iBarLen), L'━'); str += Reset;
+			if (iBarLen >= Detail::LOGO_W) str += L" 🔪";
+			str += L"\x1b[K\n\x1b[K\n";
+
+			const std::wstring strShown = strSub.substr(0, iSubLen);
+			str += Center_Pad(strSub, iCols); str += Gray; str += strShown; str += Reset; str += L"\x1b[K\n\x1b[K\n\x1b[K\n";
+
+			if (isPrompt) { str += Center_Pad(strPrompt, iCols); str += Yellow; str += Bold; str += strPrompt; str += Reset; }
+			str += L"\x1b[K\x1b[J";
+			Write(str);
+		};
+
+		Set_CursorVisible(false);
+		Clear();
+		Draw(0, 0, 0, false);					Sleep(600);
+		for (int i = 1; i <= 6; ++i) { Draw(i, 0, 0, false); Sleep(120); }
+		Draw(6, Detail::LOGO_W / 2, 0, false);	Sleep(120);
+		Draw(6, Detail::LOGO_W, 0, false);		Sleep(500);
+		for (size_t i = 1; i <= strSub.size(); i += 3) { Draw(6, Detail::LOGO_W, i, false); Sleep(40); }
+
+		FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));	// 인트로 중에 눌린 키는 버림
+		for (int iTick = 0; ; ++iTick)
+		{
+			if (iTick % 10 == 0)	// 0.5초마다 깜빡임
+				Draw(6, Detail::LOGO_W, strSub.size(), (iTick / 10) % 2 == 0);
+			if (!Poll_Keys().empty()) break;
+			Sleep(50);
+		}
+	}
+
+	/* ---------------- 로그인 (가운데 카드) ---------------- */
+	struct LoginResult
+	{
+		bool			isOk{ false };		// Esc로 나가면 false
+		std::wstring	strNickname;
+		std::string		strIP;
+		uint16_t		iPort{ 0 };
+	};
+
+	/* 닉네임 / 서버 IP / 포트 입력. Tab·↑↓ 칸 이동, Enter 접속, Esc 종료
+	   strError : 이전 접속 실패 사유 등을 빨간 줄로 보여줄 때 사용 */
+	inline LoginResult Run_Login(const std::wstring& strDefaultIP = L"127.0.0.1", uint16_t iDefaultPort = 1234, const std::wstring& strError = L"")
+	{
+		using namespace Color;
+		constexpr int	BOX_W = 44, FIELD_W = 26, MAX_NICK_W = 16;	// 닉네임 최대 16칸 (한글 8자)
+		const wchar_t*	szLabel[3] = { L"닉네임 ", L"서버 IP", L"포트   " };
+
+		std::wstring	strField[3] = { L"", strDefaultIP, std::to_wstring(iDefaultPort) };
+		int				iFocus{ 0 };
+		std::wstring	strMsg = strError;
+		bool			isDirty{ true };
+
+		Set_CursorVisible(false);
+		Clear();
+		FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+
+		while (true)
+		{
+			/* ---- 입력 ---- */
+			for (const KEY_EVENT_RECORD& tKey : Poll_Keys(true))
+			{
+				isDirty = true;
+				std::wstring& strCur = strField[iFocus];
+				const wchar_t ch = tKey.uChar.UnicodeChar;
+
+				if (tKey.wVirtualKeyCode == VK_ESCAPE) { Set_CursorVisible(true); return {}; }
+				else if (tKey.wVirtualKeyCode == VK_TAB || tKey.wVirtualKeyCode == VK_DOWN) iFocus = (iFocus + 1) % 3;
+				else if (tKey.wVirtualKeyCode == VK_UP) iFocus = (iFocus + 2) % 3;
+				else if (tKey.wVirtualKeyCode == VK_BACK)
+				{
+					if (!strCur.empty()) strCur.pop_back();
+					if (!strCur.empty() && strCur.back() >= 0xD800 && strCur.back() <= 0xDBFF) strCur.pop_back();	// 이모지 반쪽 정리
+				}
+				else if (tKey.wVirtualKeyCode == VK_RETURN)
+				{
+					/* ---- 검사 ---- */
+					IN_ADDR tAddr{};
+					const uint16_t iPort = Parse_Port(strField[2]);
+					if (strField[0].empty())								{ strMsg = L"닉네임을 입력하세요."; iFocus = 0; }
+					else if (InetPtonW(AF_INET, strField[1].c_str(), &tAddr) != 1)	{ strMsg = L"서버 IP 형식이 올바르지 않습니다. (예: 192.168.0.5)"; iFocus = 1; }
+					else if (iPort == 0)									{ strMsg = L"포트는 1024 ~ 65535 사이 숫자입니다."; iFocus = 2; }
+					else
+					{
+						std::string strIP;		// 숫자와 '.'만 입력받았으므로 그대로 좁혀도 안전
+						for (wchar_t c : strField[1]) strIP += static_cast<char>(c);
+						Set_CursorVisible(true);
+						return { true, strField[0], strIP, iPort };
+					}
+				}
+				else if (ch >= 32)
+				{
+					/* 칸마다 받을 수 있는 글자 제한 */
+					if (iFocus == 0 && ch != L' ' && Width(strCur + ch) <= MAX_NICK_W)			strCur += ch;
+					else if (iFocus == 1 && (iswdigit(ch) || ch == L'.') && strCur.size() < 15)	strCur += ch;
+					else if (iFocus == 2 && iswdigit(ch) && strCur.size() < 5)					strCur += ch;
+				}
+			}
+
+			/* ---- 그리기 (바뀐 게 있거나 창 크기가 바뀌었을 때만) ---- */
+			if (isDirty || Need_Redraw())
+			{
+				isDirty = false;
+				int iCols{ 0 }, iRows{ 0 };
+				Get_ConsoleSize(iCols, iRows);
+				const std::wstring strLogoLeft = Spaces((iCols - Detail::LOGO_W) / 2);
+				const std::wstring strBoxLeft = Spaces((iCols - BOX_W - 2) / 2);
+				const std::wstring strSubtitle = L"7인 마피아 게임 · CMD Edition";
+
+				std::wstring str = L"\x1b[H\x1b[K\n";
+				for (int i = 0; i < 6; ++i) str += strLogoLeft + Logo_Line(i) + L"\x1b[K\n";
+				str += Center_Pad(strSubtitle, iCols); str += Gray; str += strSubtitle; str += Reset; str += L"\x1b[K\n\x1b[K\n";
+
+				/* 상단 테두리: ┌──── 로 그 인 ────┐ */
+				const std::wstring strTitle = L" 로 그 인 ";
+				const int iLeftLine = (BOX_W - Width(strTitle)) / 2;
+				str += strBoxLeft; str += Gray; str += L"┌"; str += std::wstring(iLeftLine, L'─'); str += Reset;
+				str += Bold; str += strTitle; str += Reset;
+				str += Gray; str += std::wstring(BOX_W - iLeftLine - Width(strTitle), L'─'); str += L"┐"; str += Reset; str += L"\x1b[K\n";
+
+				auto Row = [&](const std::wstring& strColored, int iPlainWidth)
+				{
+					return strBoxLeft + Gray + L"│" + Reset + strColored + Spaces(BOX_W - iPlainWidth) + Gray + L"│" + Reset + L"\x1b[K\n";
+				};
+
+				str += Row(L"", 0);
+				for (int i = 0; i < 3; ++i)
+				{
+					const bool isFocus = (i == iFocus);
+					std::wstring strLine = isFocus ? std::wstring(L"  ") + Yellow + L"▸ " + Reset + Bold + szLabel[i] + Reset
+												   : std::wstring(L"    ") + Gray + szLabel[i] + Reset;
+					strLine += L"  ";
+					const int iTextW = Width(strField[i]);
+					if (isFocus)
+						strLine += std::wstring(Detail::FIELD) + L" " + strField[i] + Detail::CURSOR + L" " + Reset + Detail::FIELD + Spaces(FIELD_W - 2 - iTextW) + Reset;
+					else
+						strLine += L" " + Fit(strField[i], FIELD_W - 1);
+					str += Row(strLine, 4 + Width(szLabel[i]) + 2 + FIELD_W);
+				}
+				str += Row(L"", 0);
+
+				const std::wstring strButton = L"  Enter  접속하기  ";
+				const int iButtonLeft = (BOX_W - Width(strButton)) / 2;
+				str += Row(Spaces(iButtonLeft) + Detail::SELECT + strButton + Reset, iButtonLeft + Width(strButton));
+				str += Row(L"", 0);
+				str += strBoxLeft; str += Gray; str += L"└"; str += std::wstring(BOX_W, L'─'); str += L"┘"; str += Reset; str += L"\x1b[K\n";
+
+				/* 오류 메시지 + 조작 안내 */
+				str += strMsg.empty() ? std::wstring(L"\x1b[K\n")
+									  : Center_Pad(L"✖ " + strMsg, iCols) + Red + L"✖ " + strMsg + Reset + L"\x1b[K\n";
+				const std::wstring strHelp = L"[Tab] 다음 칸    [↑↓] 이동    [Enter] 접속    [Esc] 종료";
+				str += Center_Pad(strHelp, iCols);
+				str += Yellow; str += L"[Tab]"; str += Reset; str += Gray; str += L" 다음 칸    "; str += Reset;
+				str += Yellow; str += L"[↑↓]"; str += Reset; str += Gray; str += L" 이동    "; str += Reset;
+				str += Yellow; str += L"[Enter]"; str += Reset; str += Gray; str += L" 접속    "; str += Reset;
+				str += Yellow; str += L"[Esc]"; str += Reset; str += Gray; str += L" 종료"; str += Reset;
+				str += L"\x1b[K\x1b[J";
+				Write(str);
+			}
+			Sleep(16);
+		}
+	}
+
+	/* ---------------- 로비 (방 목록 선택 + 접속 중) ---------------- */
+	struct RoomView
+	{
+		int				iNo{ 0 };			// 방 번호 (화면에 [ 1 ] 로 표시)
+		std::wstring	strName;
+		int				iCur{ 0 };
+		int				iMax{ 7 };
+		std::wstring	strState;			// "대기 중", "게임 중 · 낮 2일차" 등
+		bool			isPlaying{ false };	// 게임 중이면 회색으로
+	};
+
+	struct LobbyView
+	{
+		std::wstring				strNickname;	// 내 닉네임 (접속 중 목록에서 "(나)" 표시)
+		std::wstring				strServer;		// "127.0.0.1:1234"
+		std::vector<std::wstring>	vecMembers;		// 접속 중인 사람 이름
+		std::vector<RoomView>		vecRooms;
+		int							iSelected{ 0 };	// 선택된 방 인덱스 (vecRooms 기준). ↑↓ 처리는 호출하는 쪽에서
+	};
+
+	/* 로비 화면 그리기. 바뀐 게 있을 때만 호출하면 됨 (Need_Redraw()와 같이 사용 가능) */
+	inline void Render_Lobby(const LobbyView& tView)
+	{
+		using namespace Color;
+		constexpr int ROOM_W = 64, MEMBER_W = 24, LIST_ROWS = 9;
+
+		/* 상단: 로고 + 오른쪽 환영 문구 */
+		const std::wstring strSide[6] = {
+			L"",
+			std::wstring(Bold) + tView.strNickname + Reset + L" 님, 어서 오세요",
+			std::wstring(Gray) + L"서버  " + tView.strServer + Reset,
+			std::wstring(Green) + L"●" + Reset + Gray + L" 접속 중  " + std::to_wstring(tView.vecMembers.size()) + L"명" + Reset,
+			L"", L"" };
+
+		std::wstring str = L"\x1b[H\x1b[K\n";
+		for (int i = 0; i < 6; ++i) str += L"  " + Logo_Line(i) + L"      " + strSide[i] + L"\x1b[K\n";
+		str += L"  "; str += Gray; str += std::wstring(ROOM_W + MEMBER_W + 6, L'─'); str += Reset; str += L"\x1b[K\n\x1b[K\n";
+
+		/* 박스 제목 줄 */
+		auto Top = [&](const std::wstring& strTitle, int iW)
+		{
+			return std::wstring(Gray) + L"┌─" + Reset + Bold + strTitle + Reset + Gray + std::wstring(iW - 1 - Width(strTitle), L'─') + L"┐" + Reset;
+		};
+		str += L"  " + Top(L" 방 목록 (" + std::to_wstring(tView.vecRooms.size()) + L") ", ROOM_W) + L"  "
+			 + Top(L" 접속 중 (" + std::to_wstring(tView.vecMembers.size()) + L") ", MEMBER_W) + L"\x1b[K\n";
+
+		/* 선택한 방이 보이도록 스크롤 */
+		const int iRoomCount = static_cast<int>(tView.vecRooms.size());
+		const int iSel = (std::min)((std::max)(tView.iSelected, 0), (std::max)(iRoomCount - 1, 0));
+		const int iFirst = (std::max)(0, iSel - (LIST_ROWS - 2));
+
+		for (int iRow = -1; iRow < LIST_ROWS; ++iRow)	// -1 = 머리글 줄
+		{
+			std::wstring strRoom;
+			if (iRow == -1)
+				strRoom = std::wstring(Gray) + Fit(L"     번호    방 이름              인원    상태", ROOM_W) + Reset;
+			else if (iFirst + iRow < iRoomCount)
+			{
+				const int iIndex = iFirst + iRow;
+				const RoomView& tRoom = tView.vecRooms[iIndex];
+				const std::wstring strNo = L"[ " + std::to_wstring(tRoom.iNo) + L" ]";
+				const std::wstring strBody = Fit(strNo, 8) + Fit(tRoom.strName, 21) + Fit(std::to_wstring(tRoom.iCur) + L"/" + std::to_wstring(tRoom.iMax), 8) + tRoom.strState;
+
+				if (iIndex == iSel)			strRoom = std::wstring(Detail::SELECT) + L" ▶  " + Fit(strBody, ROOM_W - 4) + Reset;
+				else if (tRoom.isPlaying)	strRoom = std::wstring(Gray) + L"    " + Fit(strBody, ROOM_W - 4) + Reset;
+				else						strRoom = std::wstring(L"    ") + Yellow + Bold + Fit(strNo, 8) + Reset + Fit(strBody.substr(Fit(strNo, 8).size()), ROOM_W - 12);
+			}
+			else
+				strRoom = Spaces(ROOM_W);
+
+			/* 접속 중 목록: 머리글 줄부터 이름을 채움 */
+			std::wstring strMember = Spaces(MEMBER_W);
+			const int iMember = iRow + 1;
+			if (iMember < static_cast<int>(tView.vecMembers.size()))
+			{
+				const std::wstring& strName = tView.vecMembers[iMember];
+				strMember = (strName == tView.strNickname)
+					? std::wstring(L" ") + Bold + strName + Reset + Gray + L" (나)" + Reset + Spaces(MEMBER_W - 1 - Width(strName) - 5)
+					: L" " + Fit(strName, MEMBER_W - 1);
+			}
+
+			str += L"  "; str += Gray; str += L"│"; str += Reset; str += strRoom;
+			str += Gray; str += L"│  │"; str += Reset; str += strMember; str += Gray; str += L"│"; str += Reset; str += L"\x1b[K\n";
+		}
+
+		str += L"  "; str += Gray; str += L"└"; str += std::wstring(ROOM_W, L'─'); str += L"┘  └"; str += std::wstring(MEMBER_W, L'─'); str += L"┘"; str += Reset; str += L"\x1b[K\n";
+		str += L"  ";
+		str += Yellow; str += L"[↑↓]"; str += Reset; str += L" 선택   ";
+		str += Yellow; str += L"[Enter]"; str += Reset; str += L" 입장   ";
+		str += Yellow; str += L"[C]"; str += Reset; str += L" 방 만들기   ";
+		str += Yellow; str += L"[R]"; str += Reset; str += L" 새로고침   ";
+		str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기";
+		str += L"\x1b[K\x1b[J";
+		Write(str);
 	}
 }

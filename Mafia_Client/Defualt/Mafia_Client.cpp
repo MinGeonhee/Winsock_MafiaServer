@@ -8,7 +8,7 @@ int main()
 {
 	Net::Net_Init();
 
-	std::unique_ptr<Net::CSocket> pSocket{ Net::CSocket::Create(Net::TYPE::CLIENT, Net::PROTOCAL_TYPE::TPC, Net::NET_PROTOCOL_TYPE::IPv4) };
+	std::unique_ptr<Net::CSocket> pSocket{ Net::CSocket::Create(Net::TYPE::CLIENT, Net::PROTOCAL_TYPE::TCP, Net::NET_PROTOCOL_TYPE::IPv4) };
 	std::unique_ptr<Net::CAddress> pAddress = Net::CAddress::Create(Net::TYPE::CLIENT, Net::NET_PROTOCOL_TYPE::IPv4 , 1234 , "127.0.0.1");
 
 	/* 메세지 받기 */

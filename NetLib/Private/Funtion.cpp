@@ -1,9 +1,5 @@
 #include "pch.h"
 
-
-#include "Net_Header.h"
-#include <iostream>
-
 namespace Net
 {
 	bool Net_Init()

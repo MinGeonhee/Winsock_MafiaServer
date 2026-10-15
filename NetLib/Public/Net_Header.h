@@ -14,7 +14,8 @@
 #include "CSocket.h"
 #include "CAddress.h"
 #include "CEventQueue.h"
-
+#include "CClient.h"
+#include "CServer.h"
 
 #ifdef _DEBUG
 #define NET_LOG(fmt, ...) printf("[Net] " fmt "\n", __VA_ARGS__)

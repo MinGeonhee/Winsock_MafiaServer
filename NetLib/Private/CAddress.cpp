@@ -6,7 +6,7 @@ namespace Net
 {
 
 	CAddress::CAddress()
-		: m_addr{} , m_eNetProtocalType{NET_PROTOCOL_TYPE::NET_PROTOCOL_TYPE_END}
+		: m_addr{} , m_eNetProtocalType{NET_PROTOCOL_TYPE::END}
 	{
 	}
 
@@ -16,8 +16,8 @@ namespace Net
 
 	HRESULT CAddress::Initialize(TYPE eType, NET_PROTOCOL_TYPE eNetProtocalType, uint16_t  iPortNum, const char* szIP)
 	{
-		if (eType < 0 || eType >= TYPE::TYPE_END) return E_FAIL;
-		if (eNetProtocalType < 0 || eNetProtocalType >= NET_PROTOCOL_TYPE::NET_PROTOCOL_TYPE_END) return E_FAIL;
+		if (static_cast<INT32>(eType) < 0 || eType >= TYPE::END) return E_FAIL;
+		if (static_cast<INT32>(eNetProtocalType) < 0 || eNetProtocalType >= NET_PROTOCOL_TYPE::END) return E_FAIL;
 
 		m_eNetProtocalType = eNetProtocalType;
 

@@ -42,12 +42,6 @@
     <ClCompile Include="..\Private\pch.cpp">
       <Filter>헤더 파일\Pch</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CServer.cpp">
-      <Filter>소스 파일\01. Core\00. Server</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Private\CClient.cpp">
-      <Filter>소스 파일\01. Core\01. Client</Filter>
-    </ClCompile>
     <ClCompile Include="..\Private\CGameManager.cpp">
       <Filter>소스 파일\02. Logic\00. GameManager</Filter>
     </ClCompile>
@@ -61,12 +55,6 @@
   <ItemGroup>
     <ClInclude Include="..\Public\pch.h">
       <Filter>헤더 파일\Pch</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Public\CServer.h">
-      <Filter>소스 파일\01. Core\00. Server</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Public\CClient.h">
-      <Filter>소스 파일\01. Core\01. Client</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CGameManager.h">
       <Filter>소스 파일\02. Logic\00. GameManager</Filter>

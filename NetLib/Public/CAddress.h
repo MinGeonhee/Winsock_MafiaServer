@@ -22,7 +22,7 @@ namespace Net
 		const SOCKADDR* Get_Addr() const { return reinterpret_cast<const SOCKADDR*>(&m_addr); }
 		int				Get_Size() const;
 	public:
-		static std::unique_ptr<CAddress> Create(TYPE eType, NET_PROTOCOL_TYPE eNetProtocalType, uint16_t  iPortNum, const char* szIP = nullptr);
+		static std::unique_ptr<CAddress> Create(TYPE eType, NET_PROTOCOL_TYPE eNetProtocalType, uint16_t iPortNum, const char* szIP = nullptr);
 		static std::unique_ptr<CAddress> Create_Empty();
 	private:
 		NET_PROTOCOL_TYPE	m_eNetProtocalType;

@@ -34,14 +34,23 @@
     <Filter Include="헤더 파일\Struct">
       <UniqueIdentifier>{6a447934-bd01-4ca5-8482-028e9539076b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\Address">
+      <UniqueIdentifier>{e663644f-62f8-4744-b685-227fe53de836}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Socket">
+      <UniqueIdentifier>{854c608a-7fd3-49cd-8200-ba8a10dc87a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\EventQueue">
+      <UniqueIdentifier>{047dd5ce-d925-40e8-be52-5e399e8a51be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Server">
+      <UniqueIdentifier>{e3c75271-0183-4663-9c06-76f65777c490}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Client">
+      <UniqueIdentifier>{b9e9f423-bf97-4342-968e-fb9b47bda9ad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Public\CSocket.h">
-      <Filter>소스 파일\Public</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Public\CAddress.h">
-      <Filter>소스 파일\Public</Filter>
-    </ClInclude>
     <ClInclude Include="..\Public\pch.h">
       <Filter>헤더 파일\Pch</Filter>
     </ClInclude>
@@ -57,8 +66,20 @@
     <ClInclude Include="..\Public\Struct.h">
       <Filter>헤더 파일\Struct</Filter>
     </ClInclude>
+    <ClInclude Include="..\Public\CAddress.h">
+      <Filter>소스 파일\Address</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CSocket.h">
+      <Filter>소스 파일\Socket</Filter>
+    </ClInclude>
     <ClInclude Include="..\Public\CEventQueue.h">
-      <Filter>소스 파일\Public</Filter>
+      <Filter>소스 파일\EventQueue</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CServer.h">
+      <Filter>소스 파일\Server</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CClient.h">
+      <Filter>소스 파일\Client</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -66,12 +87,6 @@
       <Filter>소스 파일\Private</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\pch.cpp">
-      <Filter>소스 파일\Private</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Private\CSocket.cpp">
-      <Filter>소스 파일\Private</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Private\CAddress.cpp">
       <Filter>소스 파일\Private</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\Funtion.cpp">
@@ -83,8 +98,20 @@
     <ClCompile Include="..\Private\Struct.cpp">
       <Filter>헤더 파일\Struct</Filter>
     </ClCompile>
+    <ClCompile Include="..\Private\CAddress.cpp">
+      <Filter>소스 파일\Address</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CSocket.cpp">
+      <Filter>소스 파일\Socket</Filter>
+    </ClCompile>
     <ClCompile Include="..\Private\CEventQueue.cpp">
-      <Filter>소스 파일\Private</Filter>
+      <Filter>소스 파일\EventQueue</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CServer.cpp">
+      <Filter>소스 파일\Server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CClient.cpp">
+      <Filter>소스 파일\Client</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
