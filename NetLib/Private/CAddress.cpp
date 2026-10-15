@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "CAddress.h"
-
 #include <iostream>
 
 namespace Net
@@ -77,12 +76,13 @@ namespace Net
 	}
 
 
-	int		CAddress::Get_PortNum() const
+	uint16_t	CAddress::Get_PortNum() const
 	{
 		return m_eNetProtocalType == Net::NET_PROTOCOL_TYPE::IPv4 ?
 			ntohs(reinterpret_cast<const SOCKADDR_IN*>(&m_addr)->sin_port) :
 			ntohs(reinterpret_cast<const SOCKADDR_IN6*>(&m_addr)->sin6_port);
 	}
+
 
 	std::string	CAddress::Get_IP()	  const
 	{

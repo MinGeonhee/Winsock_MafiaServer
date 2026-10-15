@@ -30,8 +30,12 @@
 /* Net Lib */
 #include "Net_Header.h"
 
-
 using ClientKey = uint64_t;
+constexpr ClientKey NONE_CLIENTKEY = 0;
+
+
+#include "Struct.h"
+
 
 #endif //PCH_H
 

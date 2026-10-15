@@ -13,6 +13,7 @@
 #include "Struct.h"
 #include "CSocket.h"
 #include "CAddress.h"
+#include "CEventQueue.h"
 
 
 #ifdef _DEBUG

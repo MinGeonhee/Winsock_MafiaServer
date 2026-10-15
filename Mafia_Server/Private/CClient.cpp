@@ -34,5 +34,15 @@ namespace MafiaServer
 
 		return pClient;
 	}
+	
 
+	uint16_t CClient::Get_PortNum() const
+	{
+		return m_pAddress ? m_pAddress->Get_PortNum() : 0;
+	}
+
+	std::string CClient::Get_IP() const
+	{
+		return m_pAddress ? m_pAddress->Get_IP() : std::string();
+	}
 }

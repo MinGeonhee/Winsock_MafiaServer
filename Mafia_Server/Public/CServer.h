@@ -1,5 +1,6 @@
-#pragma once
+ï»¿#pragma once
 
+#include "ConsoleUI.h"
 
 namespace Net
 {
@@ -9,6 +10,7 @@ namespace Net
 namespace MafiaServer
 {
 	class CClient;
+	class CServerEventQueue;
 
 	class CServer
 	{
@@ -33,7 +35,7 @@ namespace MafiaServer
 			if (m_pInstance) delete m_pInstance;
 			m_pInstance = nullptr;
 		}
-		/* ±âº»À¸·Î TCP ¼ÒÄÏ »ı¼º */
+		/* ê¸°ë³¸ìœ¼ë¡œ TCP ì†Œì¼“ ìƒì„± */
 		HRESULT Initialize(int iPortNumber);
 	private:
 		void	Add_Client(std::unique_ptr<Net::CAddress> pAddress, std::unique_ptr<Net::CSocket> pSocket);
@@ -42,26 +44,37 @@ namespace MafiaServer
 		bool	Listen();
 	private:
 		void	Accept_Client();
+		void	Handle_ServerEventQueue();
+		void	Handle_Connect(MafiaServer::ServerEvent&& tEvent);
 	public:
-		/* ¼­¹ö·Î µé¾î¿À´Â ¿äÃ» ¹Ş±â */
+		/* ì„œë²„ë¡œ ë“¤ì–´ì˜¤ëŠ” ìš”ì²­ ë°›ê¸° */
 		void	Pre_Update();
 		void	Update();
 		void	Late_Update();
 	public:
 		void	Set_Accept(bool is);
+		bool	Is_Accept() const { return m_isAllowAccept; }
+	public:
+		std::vector<ConsoleUI::ClientView> Get_ClientView();
+		uint16_t		Get_PortNum() const;
+		std::string		Get_IP() const;
 	private:
 		inline static CServer* m_pInstance{ nullptr };
 	private:
-		/* ¿ì¼± TCP ¼ÒÄÏ ¹× Address °ü¸® */
+		/* ìš°ì„  TCP ì†Œì¼“ ë° Address ê´€ë¦¬ */
 		bool							m_isOpenServer;
-		bool							m_isAllowAccept;
+		std::atomic<bool>				m_isAllowAccept;
 
 		std::thread						m_thAcceptReceiver;
 		std::mutex						m_mtxAcceptReceive;
 		std::unique_ptr<Net::CSocket>	m_pSocket_TCPServer;
 		std::unique_ptr<Net::CAddress>	m_pAdrress_Server;
 
-		/* Client °ü¸® */
+
+		/* ì„œë²„ Evnet Queue ê´€ë¦¬ */
+		Net::CEventQueue<MafiaServer::ServerEvent> m_ServerEventQueue;
+
+		/* Client ê´€ë¦¬ */
 		ClientKey m_iClientKey{ 0 };
 		std::unordered_map<ClientKey, std::unique_ptr<CClient>> m_umapClients;
 	};

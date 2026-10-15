@@ -14,6 +14,9 @@ namespace MafiaServer
 		HRESULT	Initialize(ClientKey iKey,std::unique_ptr<Net::CAddress> pAddress, std::unique_ptr<Net::CSocket> pSocket);
 	public:
 		ClientKey Get_ClientKey() { return m_iKey; }
+		uint16_t	Get_PortNum()const;
+		std::string Get_IP() const;
+
 	public:
 		static	std::unique_ptr<CClient> Create(ClientKey iKey,std::unique_ptr<Net::CAddress> pAddress, std::unique_ptr<Net::CSocket> pSocket);
 	private:

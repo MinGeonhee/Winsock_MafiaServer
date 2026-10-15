@@ -12,7 +12,7 @@ int main()
 	std::unique_ptr<Net::CAddress> pAddress = Net::CAddress::Create(Net::TYPE::CLIENT, Net::NET_PROTOCOL_TYPE::IPv4 , 1234 , "127.0.0.1");
 
 	/* 메세지 받기 */
-
+	pSocket->Connect(pAddress.get());
 
 	char szBuf[Net::MAX_PACKET_TOTAL_LEN]{};
 	Net::Receive_Packet(pSocket.get(), reinterpret_cast<Net::PacketHeader*>(szBuf));

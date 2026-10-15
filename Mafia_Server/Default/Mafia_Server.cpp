@@ -31,8 +31,8 @@ int main()
 	}
 	/* 윈도우 방화벽 설정 관련 쓰기 */
 
-	ConsoleUI::Write(std::wstring(L"\n  ") + ConsoleUI::Color::Green + L"● " + ConsoleUI::Color::Reset
-		+ std::to_wstring(tData.iUsingPortNumber) + L"번 포트에서 접속 대기 중\n");
+	/* 서버 준비 중 로딩 2초 */
+	ConsoleUI::Run_Loading(static_cast<uint16_t>(tData.iUsingPortNumber), 2000);
 
 	while (true)
 	{
@@ -40,6 +40,8 @@ int main()
 		m_pCGameManager->Update();
 		m_pCGameManager->Late_Update();
 		m_pCGameManager->Render();
+
+		Sleep(16);	// 약 60프레임. 없으면 빈 루프가 CPU 코어 하나를 100% 사용
 	}
 
 }

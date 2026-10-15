@@ -140,6 +140,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\CAddress.h" />
+    <ClInclude Include="..\Public\CEventQueue.h" />
     <ClInclude Include="..\Public\Struct.h" />
     <ClInclude Include="..\Public\CSocket.h" />
     <ClInclude Include="..\Public\Enum.h" />
@@ -149,6 +150,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Private\CAddress.cpp" />
+    <ClCompile Include="..\Private\CEventQueue.cpp" />
     <ClCompile Include="..\Private\Struct.cpp" />
     <ClCompile Include="..\Private\CSocket.cpp" />
     <ClCompile Include="..\Private\Enum.cpp" />

@@ -25,17 +25,17 @@
     <Filter Include="소스 파일\01. Core">
       <UniqueIdentifier>{20d9cf15-3337-4b88-904e-95a36f143e1b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="소스 파일\01. Core\Server">
-      <UniqueIdentifier>{9058a71b-5689-4fee-9f37-098bd647549b}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="소스 파일\01. Core\Client">
-      <UniqueIdentifier>{560d44f7-deb6-476c-9e7d-a274d12f0959}</UniqueIdentifier>
-    </Filter>
     <Filter Include="소스 파일\02. Logic\00. GameManager">
       <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
     </Filter>
     <Filter Include="헤더 파일\Struct">
       <UniqueIdentifier>{fc1218fc-10a0-4796-af6f-fd0b861082db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\01. Client">
+      <UniqueIdentifier>{560d44f7-deb6-476c-9e7d-a274d12f0959}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Server">
+      <UniqueIdentifier>{9058a71b-5689-4fee-9f37-098bd647549b}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -43,10 +43,10 @@
       <Filter>헤더 파일\Pch</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\CServer.cpp">
-      <Filter>소스 파일\01. Core\Server</Filter>
+      <Filter>소스 파일\01. Core\00. Server</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\CClient.cpp">
-      <Filter>소스 파일\01. Core\Client</Filter>
+      <Filter>소스 파일\01. Core\01. Client</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\CGameManager.cpp">
       <Filter>소스 파일\02. Logic\00. GameManager</Filter>
@@ -63,16 +63,19 @@
       <Filter>헤더 파일\Pch</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CServer.h">
-      <Filter>소스 파일\01. Core\Server</Filter>
+      <Filter>소스 파일\01. Core\00. Server</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CClient.h">
-      <Filter>소스 파일\01. Core\Client</Filter>
+      <Filter>소스 파일\01. Core\01. Client</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CGameManager.h">
       <Filter>소스 파일\02. Logic\00. GameManager</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\Struct.h">
       <Filter>헤더 파일\Struct</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ConsoleUI\ConsoleUI.h">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

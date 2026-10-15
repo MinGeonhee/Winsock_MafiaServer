@@ -1,16 +1,17 @@
-#pragma once
+ï»¿#pragma once
 
 
 namespace MafiaServer
 {
 	class CServer;
+	class CServerEventQueue;
 
 	class CGameManager
 	{
 	public:
 		struct Init_Data
 		{
-			int iUsingPortNumber{ 0 }; // ¼­¹ö¸¦ ¿©´Â »ç¶÷ÀÌ »ç¿ëÇÒ Æ÷Æ®¹øÈ£
+			int iUsingPortNumber{ 0 }; // ì„œë²„ë¥¼ ì—¬ëŠ” ì‚¬ëŒì´ ì‚¬ìš©í•  í¬íŠ¸ë²ˆí˜¸
 		};
 	private:
 		explicit CGameManager();
@@ -27,22 +28,23 @@ namespace MafiaServer
 			return m_pInstance;
 		}
 		void	Destory();
-		/* ±âº»À¸·Î TCP ¼ÒÄÏ »ı¼º */
+		/* ê¸°ë³¸ìœ¼ë¡œ TCP ì†Œì¼“ ìƒì„± */
 		HRESULT Initialize(const Init_Data& tData);
-	private:
-		/* Accept ¿äÃ» ¹Ş±â */
-		void	Start_Accept();
 	public:
-		/* ¼­¹ö·Î µé¾î¿À´Â ¿äÃ» ¹Ş±â */
+		/* ì„œë²„ë¡œ ë“¤ì–´ì˜¤ëŠ” ìš”ì²­ ë°›ê¸° */
 		void	Pre_Update();
 		void	Update();
 		void	Late_Update();
 		void	Render();
 	private:
+		void	Key_Input();
+		void	Allow_Accept();
+	private:
 		inline static CGameManager* m_pInstance{ nullptr };
 	private:
-		/* ¼­¹ö °ü¸® */
+		/* ì„œë²„ ê´€ë¦¬ */
 		CServer* m_pMainServer;
+		bool	 m_isDirty;	// ë°”ë€ ê²Œ ìˆì„ ë•Œë§Œ ë‹¤ì‹œ ê·¸ë¦¼
 	};
 }
 

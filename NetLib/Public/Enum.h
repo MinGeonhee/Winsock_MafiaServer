@@ -25,4 +25,14 @@ namespace Net
 		NET_PROTOCOL_TYPE_END,
 	};
 
+
+	enum SERVER_EVENT_TYPE
+	{
+		Connect = 0,		/* Connect 요청 */
+		Receive_Packet = 1, /* 패킷 받기 */
+		Send_Packet = 2,	/* 패킷 보내기 */
+		Disconnect = 3,		/* DisConnect 요청 */
+		SERVER_EVENT_TYPE_END,
+	};
+
 }

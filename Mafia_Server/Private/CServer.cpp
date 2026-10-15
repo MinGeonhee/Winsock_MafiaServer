@@ -1,12 +1,14 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "CServer.h"
 #include "CClient.h"
+
 
 namespace MafiaServer
 {
 	CServer::CServer()
 		: m_pSocket_TCPServer{ nullptr }, m_pAdrress_Server{ nullptr } , m_isOpenServer{false}
-		, m_thAcceptReceiver{} , m_mtxAcceptReceive{} , m_isAllowAccept{false}
+		, m_thAcceptReceiver{} , m_mtxAcceptReceive{} , m_isAllowAccept{false}, m_iClientKey{1}
+		, m_ServerEventQueue{}
 	{
 	}
 	CServer::~CServer()
@@ -15,15 +17,18 @@ namespace MafiaServer
 		m_isAllowAccept = false;
 		m_pSocket_TCPServer.reset();
 		m_pAdrress_Server.reset();
-		m_thAcceptReceiver.join();
+
+		if (m_thAcceptReceiver.joinable())
+			m_thAcceptReceiver.join();
 	}
+
 	HRESULT CServer::Initialize(int iPortNumber)
 	{
-		/* Net ÃÊ±âÈ­ ÇØÁÖ±â */
+		/* Net ì´ˆê¸°í™” í•´ì£¼ê¸° */
 		if (Net::Net_Init() == false)
 			return E_FAIL;
 
-		/* TCP ¼ÒÄÏ »ı¼º ÈÄ Bind ¹× Listen */
+		/* TCP ì†Œì¼“ ìƒì„± í›„ Bind ë° Listen */
 		m_pSocket_TCPServer = Net::CSocket::Create(Net::TYPE::SERVER, Net::PROTOCAL_TYPE::TPC, Net::NET_PROTOCOL_TYPE::IPv4);
 		if (m_pSocket_TCPServer == nullptr) return E_FAIL;
 
@@ -32,31 +37,41 @@ namespace MafiaServer
 		if (m_pAdrress_Server == nullptr) return E_FAIL;
 		
 
-		/* Bind Listen ±îÁö ÁøÇà */
+		/* Bind Listen ê¹Œì§€ ì§„í–‰ */
 		if (Bind()==false) return E_FAIL;
 		if (Listen()==false) return E_FAIL;
 
+		
+		m_thAcceptReceiver = std::thread(&CServer::Accept_Client,this);
 
 		return S_OK;
 	}
+
 	void CServer::Add_Client(std::unique_ptr<Net::CAddress> pAddress, std::unique_ptr<Net::CSocket> pSocket)
 	{
 		if (pAddress == nullptr || pSocket == nullptr) return;
 
-		/* Client »ı¼º ¿äÃ» */
+		/* Client ìƒì„± ìš”ì²­ */
 		std::unique_ptr<CClient> pClient = CClient::Create(m_iClientKey, std::move(pAddress), std::move(pSocket));
 		if (pClient == nullptr)
 		{
-			/* ¼­¹ö Log¿¡ ±â·ÏÇÏ±â*/
-			// ¿¬µ¿ ½ÇÆĞ ¸î¹ø ¹¹¹¹ ÀÌ·¸°Ô
+			/* ì„œë²„ Logì— ê¸°ë¡í•˜ê¸°*/
+
+			// ì—°ë™ ì‹¤íŒ¨ ëª‡ë²ˆ ë­ë­ ì´ë ‡ê²Œ
 			return;
 		}
-		
-		
+
+
+		/* Log ì¶”ê°€í•˜ê¸° */
+		ConsoleUI::Add_Log(L"#" + std::to_wstring(pClient->Get_ClientKey()) + L"  IP [ " +
+			ConsoleUI::Widen(pClient->Get_IP()) + L" ] Port [ " + std::to_wstring(pClient->Get_PortNum()) + L" ]  Client ì ‘ì†");
+
 		m_umapClients[m_iClientKey++] = std::move(pClient);
+
 
 		return;
 	}
+
 	bool CServer::Bind()
 	{
 		if (m_pSocket_TCPServer == nullptr || m_pAdrress_Server == nullptr) return false;
@@ -74,9 +89,9 @@ namespace MafiaServer
 	{
 		if (m_pAdrress_Server == nullptr || m_pSocket_TCPServer == nullptr) return;
 
-		/* ¼­¹ö°¡ ´Ù¿îµÇ±â Àü ±îÁö °è¼Ó µ·´Ù */
+		/* ì„œë²„ê°€ ë‹¤ìš´ë˜ê¸° ì „ ê¹Œì§€ ê³„ì† ëˆë‹¤ */
 		std::lock_guard<std::mutex> lock(m_mtxAcceptReceive);
-		while (m_isAllowAccept)
+		while (true)
 		{
 			std::unique_ptr<Net::CSocket> pClientSocket{ Net::CSocket::Create_Empty() };
 			if (pClientSocket == nullptr) break;
@@ -84,16 +99,23 @@ namespace MafiaServer
 			std::unique_ptr<Net::CAddress> pClientAddress{ Net::CAddress::Create_Empty() };
 			if (pClientAddress == nullptr) break;
 
-			/* Accepth ¹Ş±â */
+			/* Accepth ë°›ê¸° */
 			if (m_pSocket_TCPServer->Accept(pClientAddress.get(), pClientSocket.get()) == false) break;
-			
-			/* Client »ı¼º ¿äÃ» */
-			Add_Client(std::move(pClientAddress),std::move(pClientSocket));
+			if (m_isAllowAccept == false) continue;
+
+			MafiaServer::ServerEvent tEvent{};
+			tEvent.eEventType = Event_Type::Connect;
+			tEvent.pAddress = std::move(pClientAddress);
+			tEvent.pSocket  = std::move(pClientSocket);
+			m_ServerEventQueue.Push_Event(std::move(tEvent));
 		}
 	}
 
 	void CServer::Pre_Update()
 	{
+		/* Event Queue ì²˜ë¦¬í•˜ê¸° */
+		Handle_ServerEventQueue();
+
 	}
 	void CServer::Update()
 	{
@@ -101,14 +123,69 @@ namespace MafiaServer
 	void CServer::Late_Update()
 	{
 	}
+
 	void CServer::Set_Accept(bool is)
 	{
 		if (m_isAllowAccept == is) return;
 
 		m_isAllowAccept = is;
+	}
+
+	std::vector<ConsoleUI::ClientView> CServer::Get_ClientView()
+	{
+		std::vector<ConsoleUI::ClientView> vec{};
+		vec.reserve(m_umapClients.size());
+
+		ConsoleUI::ClientView tView{};
+		for (auto& Pair : m_umapClients)
+		{
+			tView.iKey = Pair.second->Get_ClientKey();
+			tView.iPort = Pair.second->Get_PortNum();
+			tView.strIP = Pair.second->Get_IP();
+			vec.push_back(tView);
+		}
+
+		/* ë“¤ì–´ì˜¨ Key ìˆœì„œëŒ€ë¡œ */
+		std::sort(vec.begin(), vec.end(), [](const ConsoleUI::ClientView& A, const ConsoleUI::ClientView& B){
+			return A.iKey < B.iKey;
+		});
+
+		return vec;
+	}
+
+	uint16_t CServer::Get_PortNum() const
+	{
+		return m_pAdrress_Server ? m_pAdrress_Server->Get_PortNum() : 0;
+	}
+
+	std::string MafiaServer::CServer::Get_IP() const
+	{
+		return m_pAdrress_Server ? m_pAdrress_Server->Get_IP() : std::string() ;
+	}
 
 
-		if (m_isAllowAccept == true)
-			m_thAcceptReceiver = std::thread(&CServer::Accept_Client,this);
+	void CServer::Handle_ServerEventQueue()
+	{
+		for (;;)
+		{
+			ServerEvent tEvent{};
+			if (m_ServerEventQueue.Pop_Event(tEvent) == false) break;
+			switch (tEvent.eEventType)
+			{
+			case MafiaServer::Event_Type::Connect:			Handle_Connect(std::move(tEvent)); break;
+			case MafiaServer::Event_Type::Receive_Packet:	break;
+			case MafiaServer::Event_Type::Send_Packet:		break;
+			case MafiaServer::Event_Type::Disconnect:		break;
+			default: break;
+			}
+		}
+	}
+
+	void CServer::Handle_Connect(MafiaServer::ServerEvent&& tEvent)
+	{
+		/* í˜„ì¬ Offì¸ì œ Onì¸ì§€ íŒë‹¨ */
+		if (m_isAllowAccept == false) return;
+
+		Add_Client(std::move(tEvent.pAddress), std::move(tEvent.pSocket));
 	}
 }

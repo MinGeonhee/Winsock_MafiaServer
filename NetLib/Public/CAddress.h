@@ -16,7 +16,7 @@ namespace Net
 		HRESULT	Initialize(TYPE eType, NET_PROTOCOL_TYPE eNetProtocalType, uint16_t  iPortNum , const char* szIP);
 		void			Addr_Set(const sockaddr_storage& tAddr);
 	public:
-		int				Get_PortNum() const;
+		uint16_t		Get_PortNum() const;
 		std::string		Get_IP()	  const;
 	private:
 		const SOCKADDR* Get_Addr() const { return reinterpret_cast<const SOCKADDR*>(&m_addr); }
