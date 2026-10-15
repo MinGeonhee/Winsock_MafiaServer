@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cwctype>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -92,41 +93,6 @@ namespace ConsoleUI
 			isHeld = (tKey.bKeyDown != FALSE);
 		}
 		return vecKeys;
-	}
-
-	/* 화면 맨 위 제목 줄 (모든 화면 공통) */
-	inline std::wstring Title_Line(const std::wstring& strSub)
-	{
-		using namespace Color;
-		std::wstring str;
-		str += L"\n  "; str += Red; str += Bold; str += L"🔪 MAFIA SERVER"; str += Reset;
-		str += Gray; str += L"   "; str += strSub; str += L"\x1b[K\n  "; str += std::wstring(48, L'─'); str += Reset; str += L"\x1b[K\n\x1b[K\n";
-		return str;
-	}
-
-	/* 서버 준비 중 로딩 (진행 바, dwMs 동안) */
-	inline void Run_Loading(uint16_t iPort, DWORD dwMs)
-	{
-		using namespace Color;
-		constexpr int	iBarLen = 30;
-		constexpr DWORD	dwStep = 50;
-		const wchar_t	szSpin[] = L"|/-\\";
-
-		Set_CursorVisible(false);
-		Clear();
-		for (DWORD dwTime = 0; dwTime <= dwMs; dwTime += dwStep)
-		{
-			const int iFill = static_cast<int>(iBarLen * dwTime / dwMs);
-			const int iPercent = static_cast<int>(100 * dwTime / dwMs);
-
-			std::wstring str = L"\x1b[H" + Title_Line(L"7인 마피아 게임 서버");
-			str += L"  "; str += Yellow; str += szSpin[(dwTime / dwStep) % 4]; str += Reset;
-			str += L" 서버 준비 중  "; str += Gray; str += L"(포트 "; str += std::to_wstring(iPort); str += L")"; str += Reset; str += L"\x1b[K\n\n";
-			str += L"  "; str += Green; str += std::wstring(iFill, L'█'); str += Gray; str += std::wstring(iBarLen - iFill, L'░'); str += Reset;
-			str += L"  "; str += std::to_wstring(iPercent); str += L"%\x1b[K\n";
-			Write(str);
-			Sleep(dwStep);
-		}
 	}
 
 	/* ---------------- 글자 폭 (한글·이모지 = 2칸) ---------------- */
@@ -216,68 +182,6 @@ namespace ConsoleUI
 		uint16_t	iPort{ 0 };
 	};
 
-	/* 서버 메인 화면: 상단 상태 + 왼쪽 접속자 목록 + 오른쪽 실시간 로그 */
-	inline void Render_ServerMain(uint16_t iPort, bool isAccepting, const std::vector<ClientView>& vecClients = {})
-	{
-		using namespace Color;
-
-		CONSOLE_SCREEN_BUFFER_INFO tInfo{};
-		GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &tInfo);
-		const int iCols = tInfo.srWindow.Right - tInfo.srWindow.Left + 1;
-		const int iRows = tInfo.srWindow.Bottom - tInfo.srWindow.Top + 1;
-
-		std::wstring str = L"\x1b[H" + Title_Line(L"포트 " + std::to_wstring(iPort) + L"에서 실행 중");
-
-		str += L"  "; str += Bold; str += L"서버 접속 요청"; str += Reset; str += L"   ";
-		if (isAccepting)
-		{
-			str += Green; str += Bold; str += L"● ON "; str += Reset;
-			str += Gray; str += L" 새 클라이언트의 접속을 받는 중"; str += Reset;
-		}
-		else
-		{
-			str += Red; str += Bold; str += L"○ OFF"; str += Reset;
-			str += Gray; str += L" 새 접속을 받지 않음"; str += Reset;
-		}
-		str += L"\x1b[K\n\x1b[K\n";
-
-		/* 아래 두 칸: 왼쪽 접속자 | 오른쪽 로그 */
-		constexpr int	iLeftW = 30;
-		const int		iRightW = (std::max)(10, iCols - iLeftW - 7);
-		const int		iBodyRows = (std::max)(3, iRows - 10);	// 위 6줄, 아래 안내 2줄, 여유 2줄
-
-		str += L"  "; str += Bold; str += Fit(L"접속자 (" + std::to_wstring(vecClients.size()) + L")", iLeftW); str += Reset;
-		str += Gray; str += L" │ "; str += Reset; str += Bold; str += L"로그"; str += Reset; str += L"\x1b[K\n";
-		str += L"  "; str += Gray; str += std::wstring(iLeftW, L'─'); str += L"─┼─"; str += std::wstring(iRightW, L'─'); str += Reset; str += L"\x1b[K\n";
-
-		std::vector<std::wstring> vecLogs;
-		{
-			std::lock_guard<std::mutex> lock(Detail::g_LogLock);
-			const size_t iCount = (std::min)(Detail::g_Logs.size(), static_cast<size_t>(iBodyRows));
-			vecLogs.assign(Detail::g_Logs.end() - iCount, Detail::g_Logs.end());	// 최신 로그가 아래로
-		}
-
-		for (int iRow = 0; iRow < iBodyRows; ++iRow)
-		{
-			std::wstring strLeft;
-			if (iRow < static_cast<int>(vecClients.size()))
-			{
-				const ClientView& tClient = vecClients[iRow];
-				strLeft = L"#" + std::to_wstring(tClient.iKey) + L"  " + Widen(tClient.strIP) + L":" + std::to_wstring(tClient.iPort);
-			}
-			const std::wstring strRight = iRow < static_cast<int>(vecLogs.size()) ? vecLogs[iRow] : L"";
-
-			str += L"  "; str += Fit(strLeft, iLeftW);
-			str += Gray; str += L" │ "; str += Reset;
-			str += Fit(strRight, iRightW); str += L"\x1b[K\n";
-		}
-
-		str += L"  "; str += Gray; str += std::wstring(iLeftW, L'─'); str += L"─┴─"; str += std::wstring(iRightW, L'─'); str += Reset; str += L"\x1b[K\n";
-		str += L"  "; str += Yellow; str += L"[F5]"; str += Reset; str += L" 접속 요청 On / Off\x1b[K";
-		str += L"\x1b[J";	// 아래쪽 이전 내용 지우기
-		Write(str);
-	}
-
 	/* 엔터까지 한 줄 입력 (앞뒤 공백 제거) */
 	inline std::wstring Read_Line()
 	{
@@ -337,52 +241,6 @@ namespace ConsoleUI
 
 		WSACleanup();
 		return vecIP;
-	}
-
-	/* 시작 화면: IP 안내 + 포트 입력. 올바른 포트가 들어올 때까지 반복 */
-	inline uint16_t Run_StartupScreen(uint16_t iDefaultPort, const std::wstring& strError = L"")
-	{
-		using namespace Color;
-
-		const std::vector<std::wstring> vecIP = Get_LocalIPv4();
-		const std::wstring strLine(48, L'─');
-		std::wstring strMsg = strError;
-
-		while (true)
-		{
-			std::wstring str;
-			str += L"\n  "; str += Red; str += Bold; str += L"🔪 MAFIA SERVER"; str += Reset;
-			str += Gray; str += L"   7인 마피아 게임 서버\n  "; str += strLine; str += Reset; str += L"\n\n";
-
-			str += L"  "; str += Bold; str += L"이 PC의 IP 주소"; str += Reset;
-			str += Gray; str += L"  (클라이언트에서 이 주소로 접속)\n"; str += Reset;
-			for (const std::wstring& strIP : vecIP)
-			{
-				str += L"    "; str += Green; str += L"● "; str += Reset; str += strIP; str += L"\n";
-			}
-			str += L"    "; str += Green; str += L"● "; str += Reset; str += L"127.0.0.1";
-			str += Gray; str += L"  (같은 PC에서 테스트)\n\n"; str += Reset;
-
-			str += L"  "; str += Bold; str += L"사용할 포트 번호"; str += Reset;
-			str += Gray; str += L"  (1024 ~ 65535, Enter = "; str += std::to_wstring(iDefaultPort); str += L")\n"; str += Reset;
-
-			if (!strMsg.empty())
-			{
-				str += L"  "; str += Red; str += L"✖ "; str += strMsg; str += Reset; str += L"\n";
-			}
-			str += L"  "; str += Yellow; str += L"> "; str += Reset;
-
-			Clear();
-			Write(str);
-
-			const std::wstring strInput = Read_Line();
-			if (strInput.empty()) return iDefaultPort;
-
-			if (const uint16_t iPort = Parse_Port(strInput); iPort != 0)
-				return iPort;
-
-			strMsg = L"'" + strInput + L"' 은(는) 사용할 수 없습니다. 1024 ~ 65535 사이 숫자를 입력하세요.";
-		}
 	}
 
 	/* ============================================================
@@ -639,6 +497,17 @@ namespace ConsoleUI
 		}
 	}
 
+	/* 로그인 화면 아래에 "접속 중..." 표시 (Run_Login이 끝난 직후, connect 하기 전에 호출)
+	   connect는 실패하면 Windows가 재시도하느라 약 2초 멈추므로, 그동안 멈춘 게 아니라는 걸 보여줌 */
+	inline void Show_Connecting(const std::string& strIP, uint16_t iPort)
+	{
+		using namespace Color;
+		int iCols{ 0 }, iRows{ 0 };
+		Get_ConsoleSize(iCols, iRows);
+		const std::wstring strMsg = L"⋯ " + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 서버에 접속하는 중";
+		Write(L"\x1b[K\n\x1b[K\n" + Center_Pad(strMsg, iCols) + Yellow + strMsg + Reset + L"\x1b[K");
+	}
+
 	/* ---------------- 로비 (방 목록 선택 + 접속 중) ---------------- */
 	struct RoomView
 	{
@@ -733,5 +602,225 @@ namespace ConsoleUI
 		str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기";
 		str += L"\x1b[K\x1b[J";
 		Write(str);
+	}
+
+	/* ============================================================
+	   서버 화면 : 시작(포트 입력) / 로딩 / 메인(접속자 + 로그)
+	   클라이언트 화면과 같은 스타일 (MAFIA 로고 + 박스)
+	   ============================================================ */
+
+	/* 서버 화면 공통 상단: 왼쪽 로고 6줄 + 오른쪽 안내 6줄 */
+	inline std::wstring Server_Header(const std::wstring (&strSide)[6])
+	{
+		std::wstring str = L"\x1b[H\x1b[K\n";
+		for (int i = 0; i < 6; ++i)
+			str += L"  " + Logo_Line(i) + L"      " + strSide[i] + L"\x1b[K\n";
+		return str;
+	}
+
+	inline std::wstring Separator(int iWidth)
+	{
+		return std::wstring(L"  ") + Color::Gray + std::wstring(static_cast<size_t>(iWidth), L'─') + Color::Reset + L"\x1b[K\n";
+	}
+
+	/* 박스 윗변: ┌─ 제목 ───┐  (안쪽 폭 iW) */
+	inline std::wstring Box_Top(const std::wstring& strTitle, int iW)
+	{
+		using namespace Color;
+		return std::wstring(Gray) + L"┌─" + Reset + Bold + strTitle + Reset + Gray
+			 + std::wstring(static_cast<size_t>((std::max)(0, iW - 1 - Width(strTitle))), L'─') + L"┐" + Reset;
+	}
+
+	/* 시작 화면: IP 안내 + 포트 입력. 올바른 포트가 들어올 때까지 반복 */
+	inline uint16_t Run_StartupScreen(uint16_t iDefaultPort, const std::wstring& strError = L"")
+	{
+		using namespace Color;
+		const std::vector<std::wstring> vecIP = Get_LocalIPv4();
+		std::wstring strMsg = strError;
+
+		while (true)
+		{
+			const std::wstring strSide[6] = {
+				L"",
+				std::wstring(Bold) + L"SERVER" + Reset + Gray + L"   7인 마피아 게임 서버" + Reset,
+				std::wstring(Gray) + L"서버를 열 포트 번호를 입력해 주세요" + Reset,
+				L"", L"", L"" };
+
+			std::wstring str = Server_Header(strSide);
+			str += Separator(60); str += L"\x1b[K\n";
+
+			str += L"  "; str += Bold; str += L"이 PC의 IP 주소"; str += Reset;
+			str += Gray; str += L"  (클라이언트에서 이 주소로 접속)"; str += Reset; str += L"\x1b[K\n";
+			for (const std::wstring& strIP : vecIP)
+			{
+				str += L"    "; str += Green; str += L"● "; str += Reset; str += strIP; str += L"\x1b[K\n";
+			}
+			str += L"    "; str += Green; str += L"● "; str += Reset; str += L"127.0.0.1";
+			str += Gray; str += L"  (같은 PC에서 테스트)"; str += Reset; str += L"\x1b[K\n\x1b[K\n";
+
+			str += L"  "; str += Bold; str += L"사용할 포트 번호"; str += Reset;
+			str += Gray; str += L"  (1024 ~ 65535, Enter = "; str += std::to_wstring(iDefaultPort); str += L")"; str += Reset; str += L"\x1b[K\n";
+			if (!strMsg.empty())
+			{
+				str += L"  "; str += Red; str += L"✖ "; str += strMsg; str += Reset; str += L"\x1b[K\n";
+			}
+			str += L"  "; str += Yellow; str += L"> "; str += Reset; str += L"\x1b[J";
+
+			Set_CursorVisible(true);
+			Clear();
+			Write(str);
+
+			const std::wstring strInput = Read_Line();
+			if (strInput.empty()) return iDefaultPort;
+
+			if (const uint16_t iPort = Parse_Port(strInput); iPort != 0)
+				return iPort;
+
+			strMsg = L"'" + strInput + L"' 은(는) 사용할 수 없습니다. 1024 ~ 65535 사이 숫자를 입력하세요.";
+		}
+	}
+
+	/* 서버 준비 중 로딩 (진행 바, dwMs 동안) */
+	inline void Run_Loading(uint16_t iPort, DWORD dwMs)
+	{
+		using namespace Color;
+		constexpr int	iBarLen = 40;
+		constexpr DWORD	dwStep = 50;
+		const wchar_t	szSpin[] = L"|/-\\";
+
+		Set_CursorVisible(false);
+		Clear();
+		for (DWORD dwTime = 0; dwTime <= dwMs; dwTime += dwStep)
+		{
+			const int iFill = static_cast<int>(iBarLen * dwTime / dwMs);
+			const int iPercent = static_cast<int>(100 * dwTime / dwMs);
+
+			const std::wstring strSide[6] = {
+				L"",
+				std::wstring(Bold) + L"SERVER" + Reset + Gray + L"   포트 " + std::to_wstring(iPort) + Reset,
+				std::wstring(Yellow) + szSpin[(dwTime / dwStep) % 4] + Reset + L" 서버 준비 중",
+				L"", L"", L"" };
+
+			std::wstring str = Server_Header(strSide);
+			str += Separator(60); str += L"\x1b[K\n";
+			str += L"  "; str += Red; str += std::wstring(static_cast<size_t>(iFill), L'━'); str += Gray; str += std::wstring(static_cast<size_t>(iBarLen - iFill), L'─'); str += Reset;
+			str += L"  "; str += std::to_wstring(iPercent); str += L"%"; str += (iFill >= iBarLen ? L"  🔪" : L""); str += L"\x1b[K\x1b[J";
+			Write(str);
+			Sleep(dwStep);
+		}
+	}
+
+	/* 표 형태 칸 폭: 접속자 박스 / 로그 박스 공통 */
+	namespace Detail
+	{
+		constexpr int COL_TIME = 11, COL_NO = 5, COL_IP = 16, COL_PORT = 7;
+	}
+
+	/* 로그 한 줄 그리기 (폭 iWidth)
+	   "시간\t번호\tIP\t포트\t내용" 처럼 탭으로 나뉜 줄은 열 정렬 + 색, 탭이 없으면 그대로 */
+	inline std::wstring Log_Cell(const std::wstring& strLine, int iWidth)
+	{
+		using namespace Color;
+		std::vector<std::wstring> vecCols;
+		size_t iStart = 0, iTab = 0;
+		while ((iTab = strLine.find(L'\t', iStart)) != std::wstring::npos) { vecCols.push_back(strLine.substr(iStart, iTab - iStart)); iStart = iTab + 1; }
+		vecCols.push_back(strLine.substr(iStart));
+		if (vecCols.size() != 5) return Fit(strLine, iWidth);
+
+		const int iRest = (std::max)(0, iWidth - Detail::COL_TIME - Detail::COL_NO - Detail::COL_IP - Detail::COL_PORT);
+		return std::wstring(Gray) + Fit(vecCols[0], Detail::COL_TIME) + Reset
+			 + Yellow + Fit(vecCols[1], Detail::COL_NO) + Reset
+			 + Fit(vecCols[2], Detail::COL_IP)
+			 + Cyan + Fit(vecCols[3], Detail::COL_PORT) + Reset
+			 + Fit(vecCols[4], iRest);
+	}
+
+	/* 서버 메인 화면: 상단 로고 + 상태 / 아래 [접속자 | 로그] 두 칸 박스 */
+	/* 실제로 그리는 함수: 접속자 수 + "i번째 접속자의 표시 정보" 함수 (화면에 보이는 줄만 호출됨)
+	   fnGetLogs : "최근 n줄의 로그 문장"을 돌려주는 함수. 비어 있으면 ConsoleUI::Add_Log로 쌓은 로그를 사용 */
+	inline void Render_ServerMain(uint16_t iPort, bool isAccepting, size_t iClientCount, const std::function<ClientView(size_t)>& fnGetClient,
+								  const std::function<std::vector<std::wstring>(size_t)>& fnGetLogs = nullptr)
+	{
+		using namespace Color;
+		int iCols{ 0 }, iRows{ 0 };
+		Get_ConsoleSize(iCols, iRows);
+
+		constexpr int	LEFT_W = 28;
+		const int		RIGHT_W = (std::max)(20, iCols - LEFT_W - 10);	// 여백 2 + 테두리 4 + 박스 사이 2 + 오른쪽 여유 2
+		const int		iBodyRows = (std::max)(3, iRows - 14);			// 위 9줄 + 박스 위아래 2줄 + 안내 1줄 + 여유 2줄
+
+		/* 상단 */
+		const std::wstring strSide[6] = {
+			L"",
+			std::wstring(Bold) + L"SERVER" + Reset + Gray + L"   포트 " + std::to_wstring(iPort) + L"에서 실행 중" + Reset,
+			isAccepting
+				? std::wstring(Green) + L"●" + Reset + L" 접속 요청  " + Green + Bold + L"ON " + Reset + Gray + L"  새 접속을 받는 중" + Reset
+				: std::wstring(Red) + L"○" + Reset + L" 접속 요청  " + Red + Bold + L"OFF" + Reset + Gray + L"  새 접속을 받지 않음" + Reset,
+			std::wstring(Gray) + L"접속자 " + std::to_wstring(iClientCount) + L"명" + Reset,
+			L"", L"" };
+
+		std::wstring str = Server_Header(strSide);
+		str += Separator(LEFT_W + RIGHT_W + 6); str += L"\x1b[K\n";
+
+		/* 박스 윗변 */
+		str += L"  " + Box_Top(L" 접속자 (" + std::to_wstring(iClientCount) + L") ", LEFT_W) + L"  " + Box_Top(L" 로그 ", RIGHT_W) + L"\x1b[K\n";
+
+		/* 최신 로그가 아래로 오도록 마지막 iBodyRows개 */
+		std::vector<std::wstring> vecLogs;
+		if (fnGetLogs)
+			vecLogs = fnGetLogs(static_cast<size_t>(iBodyRows - 1));	// 첫 줄은 머리글
+		else
+		{
+			std::lock_guard<std::mutex> lock(Detail::g_LogLock);
+			const size_t iCount = (std::min)(Detail::g_Logs.size(), static_cast<size_t>(iBodyRows - 1));
+			vecLogs.assign(Detail::g_Logs.end() - iCount, Detail::g_Logs.end());
+		}
+
+		for (int iRow = 0; iRow < iBodyRows; ++iRow)
+		{
+			std::wstring strLeft = Spaces(LEFT_W), strRight;
+			if (iRow == 0)	/* 머리글 */
+			{
+				strLeft = std::wstring(Gray) + L" " + Fit(L"번호", Detail::COL_NO) + Fit(L"IP", Detail::COL_IP) + Fit(L"포트", LEFT_W - 1 - Detail::COL_NO - Detail::COL_IP) + Reset;
+				strRight = std::wstring(Gray) + L" " + (fnGetLogs
+					? Fit(L"시간", Detail::COL_TIME) + Fit(L"번호", Detail::COL_NO) + Fit(L"IP", Detail::COL_IP) + Fit(L"포트", Detail::COL_PORT) + Fit(L"내용", RIGHT_W - 1 - Detail::COL_TIME - Detail::COL_NO - Detail::COL_IP - Detail::COL_PORT)
+					: Spaces(RIGHT_W - 1)) + Reset;
+			}
+			else
+			{
+				const int iIndex = iRow - 1;
+				if (iIndex < static_cast<int>(iClientCount))
+				{
+					const ClientView tClient = fnGetClient(static_cast<size_t>(iIndex));
+					strLeft = std::wstring(L" ") + Yellow + Fit(L"#" + std::to_wstring(tClient.iKey), Detail::COL_NO) + Reset
+							+ Fit(Widen(tClient.strIP), Detail::COL_IP)
+							+ Cyan + Fit(std::to_wstring(tClient.iPort), LEFT_W - 1 - Detail::COL_NO - Detail::COL_IP) + Reset;
+				}
+				strRight = L" " + Log_Cell(iIndex < static_cast<int>(vecLogs.size()) ? vecLogs[iIndex] : L"", RIGHT_W - 1);
+			}
+
+			str += L"  "; str += Gray; str += L"│"; str += Reset; str += strLeft;
+			str += Gray; str += L"│  │"; str += Reset; str += strRight; str += Gray; str += L"│"; str += Reset; str += L"\x1b[K\n";
+		}
+
+		/* 박스 아랫변 + 안내 */
+		str += L"  "; str += Gray; str += L"└"; str += std::wstring(LEFT_W, L'─'); str += L"┘  └"; str += std::wstring(static_cast<size_t>(RIGHT_W), L'─'); str += L"┘"; str += Reset; str += L"\x1b[K\n";
+		str += L"  "; str += Yellow; str += L"[F5]"; str += Reset; str += L" 접속 요청 On / Off";
+		str += L"\x1b[K\x1b[J";
+		Write(str);
+	}
+
+	/* ClientView 목록을 그대로 넘기는 버전 */
+	inline void Render_ServerMain(uint16_t iPort, bool isAccepting, const std::vector<ClientView>& vecClients = {})
+	{
+		Render_ServerMain(iPort, isAccepting, vecClients.size(), [&](size_t i) { return vecClients[i]; });
+	}
+
+	/* 키 목록 + "키 → 표시 정보" 함수를 넘기는 버전 (ClientView vector를 따로 만들 필요 없음)
+	   예) Render_ServerMain(port, accept, server->Get_ClientOrder(), [&](uint64_t iKey) { ... return ClientView{ iKey, ip, port }; }); */
+	template<class FnGetView>
+	inline void Render_ServerMain(uint16_t iPort, bool isAccepting, const std::vector<uint64_t>& vecKeys, FnGetView fnGetView)
+	{
+		Render_ServerMain(iPort, isAccepting, vecKeys.size(), [&](size_t i) { return ClientView(fnGetView(vecKeys[i])); });
 	}
 }

@@ -27,11 +27,16 @@ namespace Net{
 		bool Listen(int iMaxClientNum = SOMAXCONN);
 		bool Accept(OUT CAddress* pAddress, OUT CSocket* pSocket);
 		//Client¿ë
-		bool	Connect(const CAddress* pAddress);
+		bool			Connect(const CAddress* pAddress);
 		//°ø¿ë
-		int		Get_LastError() { return m_iLastError; }
+		int				Get_LastError() { return m_iLastError; }
 
-		const SOCKET Get_Socket() const { return m_pSocket; }
+		const SOCKET	Get_Socket() const { return m_pSocket; }
+
+		bool			Get_LocalAddress(CAddress* pOutAddress);
+
+		TYPE			Get_Type()		   { return m_eType; }
+		PROTOCAL_TYPE	Get_ProtocalType() { return m_eProtocalType; }
 	public:
 		static std::unique_ptr<CSocket> Create(TYPE eType, PROTOCAL_TYPE eProtocalType,NET_PROTOCOL_TYPE eNetProtocalType);
 		static std::unique_ptr<CSocket> Create_Empty();

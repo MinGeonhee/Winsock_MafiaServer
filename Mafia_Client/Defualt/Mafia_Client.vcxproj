@@ -108,7 +108,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/;../../ConsoleUI/</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -123,7 +124,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/;../../ConsoleUI/</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -131,10 +133,26 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\Private\CClientApp.cpp" />
+    <ClCompile Include="..\Private\CGame.cpp" />
+    <ClCompile Include="..\Private\CIntro.cpp" />
+    <ClCompile Include="..\Private\CLobby.cpp" />
+    <ClCompile Include="..\Private\CLogin.cpp" />
+    <ClCompile Include="..\Private\CRoom.cpp" />
+    <ClCompile Include="..\Private\CScene.cpp" />
+    <ClCompile Include="..\Private\Enum.cpp" />
     <ClCompile Include="..\Private\pch.cpp" />
     <ClCompile Include="Mafia_Client.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Public\CClientApp.h" />
+    <ClInclude Include="..\Public\CGame.h" />
+    <ClInclude Include="..\Public\CIntro.h" />
+    <ClInclude Include="..\Public\CLobby.h" />
+    <ClInclude Include="..\Public\CLogin.h" />
+    <ClInclude Include="..\Public\CRoom.h" />
+    <ClInclude Include="..\Public\CScene.h" />
+    <ClInclude Include="..\Public\Enum.h" />
     <ClInclude Include="..\Public\pch.h" />
   </ItemGroup>
   <ItemGroup>

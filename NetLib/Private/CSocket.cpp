@@ -27,7 +27,7 @@ namespace Net
 
 		/* TCP / UDP 프로토콜 타입에 맞게 socket 생성 */
 		m_pSocket = socket(eNetProtocalType == NET_PROTOCOL_TYPE::IPv4 ? AF_INET : AF_INET6, 
-			m_eProtocalType == PROTOCAL_TYPE::TPC ? SOCK_STREAM : SOCK_DGRAM, static_cast<int>(m_eProtocalType));
+			m_eProtocalType == PROTOCAL_TYPE::TCP ? SOCK_STREAM : SOCK_DGRAM, static_cast<int>(m_eProtocalType));
 		if (m_pSocket == INVALID_SOCKET)
 		{
 			m_iLastError = WSAGetLastError();
@@ -136,6 +136,23 @@ namespace Net
 
 
 #pragma endregion
+
+	bool CSocket::Get_LocalAddress(CAddress* pOutAddress)
+	{
+		if (pOutAddress == nullptr) return false;
+
+		sockaddr_storage tAddr{};
+		int iLen = sizeof(tAddr);
+		if (getsockname(m_pSocket, reinterpret_cast<SOCKADDR*>(&tAddr), &iLen) == SOCKET_ERROR)
+		{
+			m_iLastError = WSAGetLastError();
+			return false;
+		}
+
+		pOutAddress->Addr_Set(tAddr);   // CSocket은 CAddress의 friend라 private 함수 호출 가능
+
+		return true;
+	}
 
 	std::unique_ptr<CSocket> CSocket::Create(TYPE eType, PROTOCAL_TYPE eProtocalType, NET_PROTOCOL_TYPE eNetProtocalType)
 	{

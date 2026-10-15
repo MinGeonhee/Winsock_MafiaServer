@@ -30,14 +30,8 @@ namespace Net
 			pIPv4->sin_port = htons(iPortNum);
 
 			if (eType == TYPE::CLIENT)
-			{
 				if (inet_pton(AF_INET, szIP, &pIPv4->sin_addr) != 1)
-				{
-					int i = WSAGetLastError();
-					std::cout << WSAGetLastError() << std::endl;
 					return E_FAIL;
-				}
-			}
 		}
 		else if (m_eNetProtocalType == NET_PROTOCOL_TYPE::IPv6)
 		{
@@ -49,10 +43,7 @@ namespace Net
 			if (eType == TYPE::CLIENT)
 			{
 				if (inet_pton(AF_INET6, szIP, &pIPv6->sin6_addr) != 1)
-				{
-					std::cout << WSAGetLastError() << std::endl;
 					return E_FAIL;
-				}
 			}
 		}
 

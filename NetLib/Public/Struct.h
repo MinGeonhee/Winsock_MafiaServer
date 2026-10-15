@@ -5,6 +5,7 @@ namespace Net
 	class CSocket;
 	class CAddress;
 
+
 	/* Server Event 최상위 구조체 */
 	struct Event
 	{
@@ -22,9 +23,6 @@ namespace Net
 		/* Receive , Send Packet Char형태의 데이터로 담아두기 */
 		std::vector<char>  vecPacket{};
 	};
-
-
-
 
 	/* 앞쪽 4바이트 읽는 용도 */
 #pragma pack(push, 1)
@@ -56,10 +54,18 @@ namespace Net
 		{
 		}
 	};
-
-
-
-
 #pragma pack(pop)
 
+
+	/* 기록 */
+	struct NetLog
+	{
+		/* 어떤 타입의 로그인지 */
+		Net::NET_LOG_TYPE eType{ Net::NET_LOG_TYPE::END };
+		
+		ClientKey		  iKey{};
+		std::string		  strIP{};
+		uint16_t		  iPortNum{};
+		SYSTEMTIME		  tTime{};
+	};
 }

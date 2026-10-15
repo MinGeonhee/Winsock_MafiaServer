@@ -1,32 +1,32 @@
 ﻿// Mafia_Client.cpp : 이 파일에는 'main' 함수가 포함됩니다. 거기서 프로그램 실행이 시작되고 종료됩니다.
 //
 #include "pch.h"
-
+#include "CClientApp.h"
 using namespace std;
 
 int main()
 {
-	Net::Net_Init();
+	MafiaClient::CClientApp::Init_Data tData{};
+	tData.tClientData.szEnterServerIP = Net::DEFAULT_SERVER_IP;
+	tData.tClientData.iEnterServerPortNum = 1234;
 
-	std::unique_ptr<Net::CSocket> pSocket{ Net::CSocket::Create(Net::TYPE::CLIENT, Net::PROTOCAL_TYPE::TCP, Net::NET_PROTOCOL_TYPE::IPv4) };
-	std::unique_ptr<Net::CAddress> pAddress = Net::CAddress::Create(Net::TYPE::CLIENT, Net::NET_PROTOCOL_TYPE::IPv4 , 1234 , "127.0.0.1");
+	MafiaClient::CClientApp* pApp = MafiaClient::CClientApp::Get_Instance();
 
-	/* 메세지 받기 */
-	pSocket->Connect(pAddress.get());
-
-	char szBuf[Net::MAX_PACKET_TOTAL_LEN]{};
-	Net::Receive_Packet(pSocket.get(), reinterpret_cast<Net::PacketHeader*>(szBuf));
-	
-
-
-	if (reinterpret_cast<Net::PacketHeader*>(szBuf)->usType == 0)
+	if (FAILED(pApp->Initialize(tData)))
 	{
-		//채팅
-		Net::Packet<Net::Chat>* pChat = reinterpret_cast<Net::Packet<Net::Chat>*>(szBuf);
-
-		std::cout << pChat->tData.szMsg << std::endl;
+		pApp->Destory();
+		return 0;
 	}
 
+	while (pApp->Is_Running())
+	{
+		pApp->Pre_Update();
+		pApp->Update();
+		pApp->Late_Update();
+		pApp->Render();
 
-	Net::Net_Release();
+		Sleep(16);	/* 약 60프레임. 콘솔이라 CPU 100% 안 먹게 */
+	}
+
+	pApp->Destory();	/* 안에서 Net_Release 호출 */
 }

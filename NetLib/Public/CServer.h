@@ -17,11 +17,13 @@ namespace Net
 		};
 	private:
 		explicit CServer();
+	public:
 		virtual ~CServer();
 	private:
 		HRESULT Initialize(const CServer::Init_Data& tData);
 	private:
 		void	Add_Client(std::unique_ptr<Net::CAddress> pAddress, std::unique_ptr<Net::CSocket> pSocket);
+		void	Unconnect_Client(ClientKey iKey);
 	private:
 		bool	Bind();
 		bool	Listen();
@@ -29,6 +31,11 @@ namespace Net
 		void	Accept_Client();
 		void	Handle_ServerEventQueue();
 		void	Handle_Connect(Net::Event&& tEvent);
+		void	Handle_RejectConnect(Net::Event&& tEvent);
+
+
+
+		void	Add_Logs(NET_LOG_TYPE eType, ClientKey iKey, std::string strIP, uint16_t iPortNum);
 	public:
 		/* 서버로 들어오는 요청 받기 */
 		void	Pre_Update();
@@ -38,26 +45,32 @@ namespace Net
 		void	Set_Accept(bool is);
 		bool	Is_Accept() const { return m_isAllowAccept; }
 	public:
-		uint16_t		Get_PortNum() const;
-		std::string		Get_IP() const;
+		const std::deque<Net::NetLog>&		Get_Logs() const { return m_dequeLogs; }
+		const CClient*						Get_Client(ClientKey iKey) const;
+		const std::vector<ClientKey>&		Get_ClientKeys() const { return m_vecClientOrder; }
+		uint16_t							Get_PortNum() const;
+		std::string							Get_IP() const;
 	public:
-		std::unique_ptr<CServer> Create(const CServer::Init_Data& tData);
+		static std::unique_ptr<CServer> Create(const CServer::Init_Data& tData);
 	private:
 		/* 우선 TCP 소켓 및 Address 관리 */
 		bool							m_isOpenServer;
 		std::atomic<bool>				m_isAllowAccept;
 
 		std::thread						m_thAcceptReceiver;
-		std::mutex						m_mtxAcceptReceive;
 		std::unique_ptr<Net::CSocket>	m_pSocket;
 		std::unique_ptr<Net::CAddress>	m_pAddress;
 
 
 		/* 서버 Evnet Queue 관리 */
-		Net::CEventQueue<Net::Event> m_ServerEventQueue;
+		Net::CEventQueue<Net::Event>	m_ServerEventQueue;
 
 		/* Client 관리 */
-		ClientKey m_iClientKey{ 0 };
+		ClientKey m_iClientKey;
 		std::unordered_map<ClientKey, std::unique_ptr<CClient>> m_umapClients;
+		std::vector<ClientKey>									m_vecClientOrder;
+
+		/* Log관리용 */
+		std::deque<Net::NetLog>		  m_dequeLogs;
 	};
 }

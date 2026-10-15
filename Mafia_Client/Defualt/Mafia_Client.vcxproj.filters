@@ -22,6 +22,36 @@
     <Filter Include="헤더 파일\00. Pch">
       <UniqueIdentifier>{e93c6250-c1a5-44c4-9212-b08be10e700f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="헤더 파일\Enum">
+      <UniqueIdentifier>{85752832-9e31-4410-bf37-f7220dc092bd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\02. Logic">
+      <UniqueIdentifier>{94f3e70a-11c5-460d-b7d1-f62c29a8fc14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\02. Logic\00. ClientApp">
+      <UniqueIdentifier>{6a1393b9-6a20-4fe1-8216-a5759e1fbaff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene">
+      <UniqueIdentifier>{400a1fc9-c84d-443f-8d4d-e115aa54c542}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\01. Login">
+      <UniqueIdentifier>{9f64dbc6-69ed-40cc-8884-cb51783a0c72}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\02. Lobby">
+      <UniqueIdentifier>{1d17b1c9-0d58-42d5-96c2-9602495fe4ed}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\03. Room">
+      <UniqueIdentifier>{792e818f-11df-4f11-a6ee-cbbd4373ccb3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\04. Game">
+      <UniqueIdentifier>{9cf7e34e-40a7-421c-8e56-3ee590755387}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\00. Intro">
+      <UniqueIdentifier>{9ae1678f-9dba-4360-8269-158e6b6cf9c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\Scene">
+      <UniqueIdentifier>{2a7d1dfe-b96d-4945-b4b8-e5dee50c7b80}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Mafia_Client.cpp">
@@ -30,10 +60,58 @@
     <ClCompile Include="..\Private\pch.cpp">
       <Filter>헤더 파일\00. Pch</Filter>
     </ClCompile>
+    <ClCompile Include="..\Private\CClientApp.cpp">
+      <Filter>소스 파일\02. Logic\00. ClientApp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\Enum.cpp">
+      <Filter>헤더 파일\Enum</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CIntro.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\00. Intro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CRoom.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\03. Room</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CLogin.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\01. Login</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CLobby.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\02. Lobby</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CGame.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\04. Game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CScene.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\Scene</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\pch.h">
       <Filter>헤더 파일\00. Pch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CClientApp.h">
+      <Filter>소스 파일\02. Logic\00. ClientApp</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\Enum.h">
+      <Filter>헤더 파일\Enum</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CIntro.h">
+      <Filter>소스 파일\01. Core\00. Scene\00. Intro</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CGame.h">
+      <Filter>소스 파일\01. Core\00. Scene\04. Game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CLobby.h">
+      <Filter>소스 파일\01. Core\00. Scene\02. Lobby</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CLogin.h">
+      <Filter>소스 파일\01. Core\00. Scene\01. Login</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CRoom.h">
+      <Filter>소스 파일\01. Core\00. Scene\03. Room</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CScene.h">
+      <Filter>소스 파일\01. Core\00. Scene\Scene</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

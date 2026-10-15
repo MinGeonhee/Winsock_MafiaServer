@@ -16,7 +16,6 @@ namespace Net
 		WSACleanup();
 	}
 
-
 	/* Send Packet */
 	bool	Send_Packet(class CSocket* pReceiveSocket, const struct PacketHeader* pPacket);
 

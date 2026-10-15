@@ -1,29 +1,32 @@
 ﻿#pragma once
 
 
-namespace MafiaServer
+namespace Net
 {
 	class CServer;
-	class CServerEventQueue;
+}
 
-	class CGameManager
+
+namespace MafiaServer
+{
+	class CServerApp
 	{
 	public:
 		struct Init_Data
 		{
-			int iUsingPortNumber{ 0 }; // 서버를 여는 사람이 사용할 포트번호
+			Net::CServer::Init_Data tServerData{};
 		};
 	private:
-		explicit CGameManager();
-		virtual ~CGameManager();
-		CGameManager(const CGameManager& cCopy) = delete;
-		CGameManager(CGameManager&& cMove) = delete;
+		explicit CServerApp();
+		virtual ~CServerApp();
+		CServerApp(const CServerApp& cCopy) = delete;
+		CServerApp(CServerApp&& cMove) = delete;
 	public:
-		static CGameManager* Get_Instance()
+		static CServerApp* Get_Instance()
 		{
 			if (m_pInstance == nullptr)
 			{
-				m_pInstance = new CGameManager();
+				m_pInstance = new CServerApp();
 			}
 			return m_pInstance;
 		}
@@ -40,10 +43,10 @@ namespace MafiaServer
 		void	Key_Input();
 		void	Allow_Accept();
 	private:
-		inline static CGameManager* m_pInstance{ nullptr };
+		inline static CServerApp* m_pInstance{ nullptr };
 	private:
 		/* 서버 관리 */
-		CServer* m_pMainServer;
+		std::unique_ptr<Net::CServer> m_pMainServer;
 		bool	 m_isDirty;	// 바뀐 게 있을 때만 다시 그림
 	};
 }

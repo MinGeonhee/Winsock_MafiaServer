@@ -22,10 +22,13 @@
 
 //etc
 #include <limits.h>
+#include <memory>
 
 
 /* Net Lib */
 #include "Net_Header.h"
+#include "Enum.h"
+
 
 #endif //PCH_H
 

@@ -25,9 +25,6 @@
     <Filter Include="소스 파일\01. Core">
       <UniqueIdentifier>{20d9cf15-3337-4b88-904e-95a36f143e1b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="소스 파일\02. Logic\00. GameManager">
-      <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
-    </Filter>
     <Filter Include="헤더 파일\Struct">
       <UniqueIdentifier>{fc1218fc-10a0-4796-af6f-fd0b861082db}</UniqueIdentifier>
     </Filter>
@@ -37,13 +34,16 @@
     <Filter Include="소스 파일\01. Core\00. Server">
       <UniqueIdentifier>{9058a71b-5689-4fee-9f37-098bd647549b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\02. Logic\00. CServerApp">
+      <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Private\pch.cpp">
       <Filter>헤더 파일\Pch</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CGameManager.cpp">
-      <Filter>소스 파일\02. Logic\00. GameManager</Filter>
+    <ClCompile Include="..\Private\CServerApp.cpp">
+      <Filter>소스 파일\02. Logic\00. CServerApp</Filter>
     </ClCompile>
     <ClCompile Include="Mafia_Server.cpp">
       <Filter>소스 파일\00. Main</Filter>
@@ -56,8 +56,8 @@
     <ClInclude Include="..\Public\pch.h">
       <Filter>헤더 파일\Pch</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CGameManager.h">
-      <Filter>소스 파일\02. Logic\00. GameManager</Filter>
+    <ClInclude Include="..\Public\CServerApp.h">
+      <Filter>소스 파일\02. Logic\00. CServerApp</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\Struct.h">
       <Filter>헤더 파일\Struct</Filter>
