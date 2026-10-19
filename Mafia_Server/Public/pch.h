@@ -31,6 +31,10 @@
 #include "Net_Header.h"
 
 
+#include "../../Protocol/Public/Enum.h"
+#include "../../Protocol/Public/Struct.h"
+#include "../../Protocol/Public/Funtion.h"
+
 
 #include "Struct.h"
 

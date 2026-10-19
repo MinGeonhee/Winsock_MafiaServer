@@ -70,6 +70,14 @@ namespace MafiaClient
 
 	void CLobby::Update()
 	{
+		/* 내 번호는 접속 직후 서버 NetLib이 보내줌 → 로비에 들어온 뒤에 도착할 수 있으니 바뀌면 다시 그림 */
+		const Net::CClient* pClient = m_pClientApp->Get_Client();
+		const uint64_t iKey = pClient ? pClient->Get_ClientKey() : 0;
+		if (iKey != m_tView.iMyKey)
+		{
+			m_tView.iMyKey = iKey;
+			m_isDirty = true;
+		}
 	}
 
 	void CLobby::Late_Update()

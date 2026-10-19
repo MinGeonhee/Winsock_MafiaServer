@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 
 
@@ -20,15 +20,15 @@ namespace Net{
 	public:
 		virtual ~CSocket();
 	private:
-		HRESULT Initialize(TYPE eType, PROTOCAL_TYPE eProtocalType, NET_PROTOCOL_TYPE eNetProtocalType); // ÃÊ±âÈ­ ÇÔ¼ö
+		HRESULT Initialize(TYPE eType, PROTOCAL_TYPE eProtocalType, NET_PROTOCOL_TYPE eNetProtocalType); // ì´ˆê¸°í™” í•¨ìˆ˜
 	public:
-		//Server¿ë
-		bool Bind(const CAddress* pAddress); //ÇØ´ç ¼ÒÄÏÀ» Address ¾È¿¡ ÀÖ´Â Port¹øÈ£¿Í ¹ÙÀÎµùÇØÁÖ´Â ÇÔ¼ö
+		//Serverìš©
+		bool Bind(const CAddress* pAddress); //í•´ë‹¹ ì†Œì¼“ì„ Address ì•ˆì— ìˆëŠ” Portë²ˆí˜¸ì™€ ë°”ì¸ë”©í•´ì£¼ëŠ” í•¨ìˆ˜
 		bool Listen(int iMaxClientNum = SOMAXCONN);
 		bool Accept(OUT CAddress* pAddress, OUT CSocket* pSocket);
-		//Client¿ë
+		//Clientìš©
 		bool			Connect(const CAddress* pAddress);
-		//°ø¿ë
+		//ê³µìš©
 		int				Get_LastError() { return m_iLastError; }
 
 		const SOCKET	Get_Socket() const { return m_pSocket; }
@@ -41,11 +41,11 @@ namespace Net{
 		static std::unique_ptr<CSocket> Create(TYPE eType, PROTOCAL_TYPE eProtocalType,NET_PROTOCOL_TYPE eNetProtocalType);
 		static std::unique_ptr<CSocket> Create_Empty();
 	private:
-		/* Ã¼Å©¿ë ÇÔ¼ö */
+		/* ì²´í¬ìš© í•¨ìˆ˜ */
 		BYTE				m_eReady;
 		TYPE				m_eType;
 		PROTOCAL_TYPE		m_eProtocalType;
-		SOCKET				m_pSocket; //À©µµ¿ì ¼ÒÄÏ
+		SOCKET				m_pSocket; //ìœˆë„ìš° ì†Œì¼“
 		int					m_iLastError;
 	};
 

@@ -522,6 +522,7 @@ namespace ConsoleUI
 	struct LobbyView
 	{
 		std::wstring				strNickname;	// 내 닉네임 (접속 중 목록에서 "(나)" 표시)
+		uint64_t					iMyKey{ 0 };	// 서버가 정해준 내 번호 (0 = 아직 못 받음)
 		std::wstring				strServer;		// "127.0.0.1:1234"
 		std::vector<std::wstring>	vecMembers;		// 접속 중인 사람 이름
 		std::vector<RoomView>		vecRooms;
@@ -537,7 +538,9 @@ namespace ConsoleUI
 		/* 상단: 로고 + 오른쪽 환영 문구 */
 		const std::wstring strSide[6] = {
 			L"",
-			std::wstring(Bold) + tView.strNickname + Reset + L" 님, 어서 오세요",
+			std::wstring(Bold) + tView.strNickname + Reset + L" 님, 어서 오세요   "
+				+ (tView.iMyKey != 0 ? std::wstring(Yellow) + L"#" + std::to_wstring(tView.iMyKey) + Reset
+									 : std::wstring(Gray) + L"번호 받는 중…" + Reset),
 			std::wstring(Gray) + L"서버  " + tView.strServer + Reset,
 			std::wstring(Green) + L"●" + Reset + Gray + L" 접속 중  " + std::to_wstring(tView.vecMembers.size()) + L"명" + Reset,
 			L"", L"" };

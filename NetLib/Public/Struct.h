@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 namespace Net
 {
@@ -6,41 +6,86 @@ namespace Net
 	class CAddress;
 
 
-	/* Server Event ÃÖ»óÀ§ ±¸Á¶Ã¼ */
+	/* Server Event ìµœìƒìœ„ êµ¬ì¡°ì²´ */
 	struct Event
 	{
+		friend class CServer;   // (Net Lib ìì²´ì ìœ¼ë¡œ ì‚¬ìš©í•  ê²½ìš°ì—ëŠ” CSocket, CAddressë¥¼ ì±„ìš¸ ìˆ˜ ìˆê²Œ í•˜ê¸° ìœ„í•¨)
+		friend class CClient;   // 
+	public:
 		/* Event Type */
-		SERVER_EVENT_TYPE eEventType{ SERVER_EVENT_TYPE::END };
-
-		/* Connect ¿äÃ» Àü¿ë */
-		std::unique_ptr <Net::CSocket> pSocket{ nullptr };
+		NET_EVENT_TYPE eEventType{ NET_EVENT_TYPE::END };
+	private:
+		/* Connect ìš”ì²­ ì „ìš© */
+		std::unique_ptr <Net::CSocket>  pSocket{ nullptr };
 		std::unique_ptr<Net::CAddress>  pAddress{ nullptr };
-
+	public:
 		/* Receive , Send Packet , DisConnect */
-		ClientKey	iSenderKey{ NONE_CLIENTKEY };
-		ClientKey	iReceiverKey{ NONE_CLIENTKEY };
+		ClientKey	iKey{ NONE_CLIENTKEY };
 
-		/* Receive , Send Packet CharÇüÅÂÀÇ µ¥ÀÌÅÍ·Î ´ã¾ÆµÎ±â */
+		/* Receive , Send Packet Charí˜•íƒœì˜ ë°ì´í„°ë¡œ ë‹´ì•„ë‘ê¸° (í—¤ë” + ë³¸ë¬¸ ê·¸ëŒ€ë¡œ) */
 		std::vector<char>  vecPacket{};
+	public:
+		/* ê²Œì„ ìª½ì—ì„œ íŒ¨í‚· ì½ì„ ë•Œ ì‚¬ìš© (vecPacketì´ ë¹„ì—ˆê±°ë‚˜ ì§§ìœ¼ë©´ 0 / nullptr) */
+		uint16_t	Get_PacketType() const;
+		uint16_t	Get_BodyLen() const;
+		const char* Get_Body() const;
+		bool		Is_NetPacket() const;	/* NetLib ë‚´ë¶€ íŒ¨í‚·ì¸ì§€ (í‚¤ í• ë‹¹ ë“±) */
 	};
 
-	/* ¾ÕÂÊ 4¹ÙÀÌÆ® ÀĞ´Â ¿ëµµ */
+	/* ì•ìª½ 4ë°”ì´íŠ¸ ì½ëŠ” ìš©ë„ */
 #pragma pack(push, 1)
 	struct PacketHeader
 	{
-		uint16_t usType{ 0 }; //¾î¶² Å¸ÀÔÀÇ µ¥ÀÌÅÍ¸¦ º¸³¾°ÇÁö ¼­¹ö&Å¬¶óÀÌ¾ğÆ® ³¢¸® ÇÕÀÇÇÑ Å¸ÀÔÀ¸·Î º¸³»±â
-		uint16_t usLen{ 0 }; //Çì´õ¸¦ Á¦¿ÜÇÑ ½ÇÁ¦·Î º¸³»Áú µ¥ÀÌÅÍÀÇ Å©±â
+		uint16_t usType{ 0 }; //ì–´ë–¤ íƒ€ì…ì˜ ë°ì´í„°ë¥¼ ë³´ë‚¼ê±´ì§€ ì„œë²„&í´ë¼ì´ì–¸íŠ¸ ë¼ë¦¬ í•©ì˜í•œ íƒ€ì…ìœ¼ë¡œ ë³´ë‚´ê¸°
+		uint16_t usLen{ 0 }; //í—¤ë”ë¥¼ ì œì™¸í•œ ì‹¤ì œë¡œ ë³´ë‚´ì§ˆ ë°ì´í„°ì˜ í¬ê¸°
+		uint8_t	 isNet{ 0 };	//1 = NetLib ë‚´ë¶€ íŒ¨í‚· (ê²Œì„ ì½œë°±ìœ¼ë¡œ ì•ˆ ë„˜ê¹€), 0 = ê²Œì„ íŒ¨í‚·. ë„¤íŠ¸ì›Œí¬ë¡œ ë‚˜ê°€ë¯€ë¡œ bool ëŒ€ì‹  í¬ê¸° ê³ ì • íƒ€ì…
 
 	public:
+		bool Is_NetPacket() const { return isNet != 0; }
 		PacketHeader() = default;
-		PacketHeader(uint16_t _usType, uint16_t _usLen)
-			: usType(_usType), usLen(_usLen) {
+		PacketHeader(uint16_t _usType, uint16_t _usLen, uint8_t _isNet = 0)
+			: usType(_usType), usLen(_usLen), isNet(_isNet) {
 		}
 	};
 #pragma pack(pop)
 
-	constexpr uint16_t MAX_PACKET_TOTAL_LEN = 1024;                                  // ÀüÃ¼
+	constexpr uint16_t MAX_PACKET_TOTAL_LEN = 1024;                                  // ì „ì²´
 	constexpr uint16_t MAX_PACKET_DATA_LEN{ MAX_PACKET_TOTAL_LEN - static_cast<uint16_t>(sizeof(PacketHeader)) };  //
+
+	inline uint16_t Event::Get_PacketType() const
+	{
+		if (vecPacket.size() < sizeof(PacketHeader)) return 0;
+		PacketHeader tHeader{};
+		memcpy(&tHeader, vecPacket.data(), sizeof(PacketHeader));
+		return tHeader.usType;
+	}
+	inline uint16_t Event::Get_BodyLen() const
+	{
+		return vecPacket.size() < sizeof(PacketHeader) ? 0 : static_cast<uint16_t>(vecPacket.size() - sizeof(PacketHeader));
+	}
+	inline const char* Event::Get_Body() const
+	{
+		return vecPacket.size() < sizeof(PacketHeader) ? nullptr : vecPacket.data() + sizeof(PacketHeader);
+	}
+	inline bool Event::Is_NetPacket() const
+	{
+		if (vecPacket.size() < sizeof(PacketHeader)) return false;
+		PacketHeader tHeader{};
+		memcpy(&tHeader, vecPacket.data(), sizeof(PacketHeader));
+		return tHeader.Is_NetPacket();
+	}
+
+	/* í—¤ë” + ë³¸ë¬¸ì„ ì´ì–´ ë¶™ì¸ ë³´ë‚¼ ë°”ì´íŠ¸ ë§Œë“¤ê¸° (ë³¸ë¬¸ì´ ë„ˆë¬´ í¬ë©´ ë¹ˆ vector) */
+	inline std::vector<char> Make_PacketBytes(uint8_t isNet,uint16_t usType, const void* pBody, uint16_t usLen)
+	{
+		if (usLen > MAX_PACKET_DATA_LEN || (usLen > 0 && pBody == nullptr)) return {};
+
+		std::vector<char> vecBytes(sizeof(PacketHeader) + usLen);
+		const PacketHeader tHeader{ usType, usLen, isNet };
+		memcpy(vecBytes.data(), &tHeader, sizeof(PacketHeader));
+		if (usLen > 0) memcpy(vecBytes.data() + sizeof(PacketHeader), pBody, usLen);
+		return vecBytes;
+	}
 
 #pragma pack(push, 1)
 	template<class T>
@@ -57,10 +102,18 @@ namespace Net
 #pragma pack(pop)
 
 
-	/* ±â·Ï */
+	/* NetLib ë‚´ë¶€ íŒ¨í‚· (isNet = 1) */
+#pragma pack(push, 1)
+	struct Client_Login		/* ì„œë²„ NetLib â†’ í´ë¼ NetLib : ì ‘ì† ì§í›„ "ë„ˆì˜ í‚¤ëŠ” #n" */
+	{
+		ClientKey iClientKey{ NONE_CLIENTKEY };
+	};
+#pragma pack(pop)
+
+	/* ê¸°ë¡ */
 	struct NetLog
 	{
-		/* ¾î¶² Å¸ÀÔÀÇ ·Î±×ÀÎÁö */
+		/* ì–´ë–¤ íƒ€ì…ì˜ ë¡œê·¸ì¸ì§€ */
 		Net::NET_LOG_TYPE eType{ Net::NET_LOG_TYPE::END };
 		
 		ClientKey		  iKey{};
@@ -68,4 +121,6 @@ namespace Net
 		uint16_t		  iPortNum{};
 		SYSTEMTIME		  tTime{};
 	};
+
+	using		NetEventFuntion = std::function<void(const Net::Event& tEvent)>;
 }

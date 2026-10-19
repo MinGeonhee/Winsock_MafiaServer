@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "Net_Header.h"
 
 namespace Net
@@ -25,7 +25,7 @@ namespace Net
 		m_eType = eType;
 		m_eProtocalType = eProtocalType;
 
-		/* TCP / UDP ÇÁ·ÎÅäÄİ Å¸ÀÔ¿¡ ¸Â°Ô socket »ı¼º */
+		/* TCP / UDP í”„ë¡œí† ì½œ íƒ€ì…ì— ë§ê²Œ socket ìƒì„± */
 		m_pSocket = socket(eNetProtocalType == NET_PROTOCOL_TYPE::IPv4 ? AF_INET : AF_INET6, 
 			m_eProtocalType == PROTOCAL_TYPE::TCP ? SOCK_STREAM : SOCK_DGRAM, static_cast<int>(m_eProtocalType));
 		if (m_pSocket == INVALID_SOCKET)
@@ -38,17 +38,17 @@ namespace Net
 	}
 
 
-#pragma region  Server Type Àü¿ë ÇÔ¼ö
+#pragma region  Server Type ì „ìš© í•¨ìˆ˜
 
 	bool CSocket::Bind(const CAddress* pAddress)
 	{
-		/* ¼ø¼­°¡ BindÀÌ»óÀÌ¶ó¸é */
+		/* ìˆœì„œê°€ Bindì´ìƒì´ë¼ë©´ */
 		if (m_eType != TYPE::SERVER)	return false;
 		if (m_eReady >= READY::BIND)	return false;
 		if (pAddress == nullptr)		return false;
 
 
-		/* ³ªÁß¿¡ ¹Ş¾Æ¿Ã ÁÖ¼Ò°ª  CAddress ±¸ÇöÈÄ ´Ù½Ã¿ÀÀÚ */
+		/* ë‚˜ì¤‘ì— ë°›ì•„ì˜¬ ì£¼ì†Œê°’  CAddress êµ¬í˜„í›„ ë‹¤ì‹œì˜¤ì */
 		if (bind(m_pSocket, pAddress->Get_Addr(), pAddress->Get_Size()))
 		{
 			m_iLastError = WSAGetLastError();
@@ -113,14 +113,14 @@ namespace Net
 
 #pragma endregion
 
-#pragma region Client Type Àü¿ë ÇÔ¼ö
+#pragma region Client Type ì „ìš© í•¨ìˆ˜
 
 	bool CSocket::Connect(const CAddress* pAddress)
 	{
 		if (m_eType != TYPE::CLIENT)	return false;
 		if (pAddress == nullptr)		return false;
 
-		// ¼­¹ö¿Í ¿¬°áÇØÁÖ´Â ±â´É
+		// ì„œë²„ì™€ ì—°ê²°í•´ì£¼ëŠ” ê¸°ëŠ¥
 		if (connect(m_pSocket, pAddress->Get_Addr(), pAddress->Get_Size()) == SOCKET_ERROR )
 		{
 			m_iLastError = WSAGetLastError();
@@ -132,7 +132,7 @@ namespace Net
 
 #pragma endregion
 
-#pragma region °ø¿ë
+#pragma region ê³µìš©
 
 
 #pragma endregion
@@ -149,7 +149,7 @@ namespace Net
 			return false;
 		}
 
-		pOutAddress->Addr_Set(tAddr);   // CSocketÀº CAddressÀÇ friend¶ó private ÇÔ¼ö È£Ãâ °¡´É
+		pOutAddress->Addr_Set(tAddr);   // CSocketì€ CAddressì˜ friendë¼ private í•¨ìˆ˜ í˜¸ì¶œ ê°€ëŠ¥
 
 		return true;
 	}
@@ -158,7 +158,7 @@ namespace Net
 	{
 		std::unique_ptr<CSocket> pSocket(new CSocket());
 
-		/* Áö¿ªº¯¼ö Ã³·³ ½áµµµÇ³× */
+		/* ì§€ì—­ë³€ìˆ˜ ì²˜ëŸ¼ ì¨ë„ë˜ë„¤ */
 		if (FAILED(pSocket->Initialize(eType, eProtocalType, eNetProtocalType)))
 			return nullptr;
 

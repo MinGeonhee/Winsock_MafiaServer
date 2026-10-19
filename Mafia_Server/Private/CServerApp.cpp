@@ -28,6 +28,9 @@ namespace MafiaServer
 
 		/* Server 만들고 초기화 */
 		m_pMainServer = Net::CServer::Create(tData.tServerData);
+		if (m_pMainServer == nullptr) return E_FAIL;
+
+		Register_NetEvents();
 
 
 		return S_OK;
@@ -77,6 +80,56 @@ namespace MafiaServer
 	void CServerApp::Allow_Accept()
 	{
 		m_pMainServer->Set_Accept(!m_pMainServer->Is_Accept());
+		m_isDirty = true;
+	}
+
+	void CServerApp::Register_NetEvents()
+	{
+		/* std::function은 멤버 함수를 바로 못 담음 (어느 객체의 함수인지 모름) → this를 잡은 람다로 연결 */
+		m_pMainServer->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Connect,			[this](const Net::Event& tEvent) { On_Connect(tEvent); });
+		m_pMainServer->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Reject_Connect,	[this](const Net::Event& tEvent) { On_RejectConnect(tEvent); });
+		m_pMainServer->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Receive_Packet,	[this](const Net::Event& tEvent) { On_ReceivePacket(tEvent); });
+		m_pMainServer->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Send_Packet,		[this](const Net::Event& tEvent) { On_SendPacket(tEvent); });
+		m_pMainServer->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Disconnect,		[this](const Net::Event& tEvent) { On_Disconnect(tEvent); });
+	}
+
+	void CServerApp::On_Connect(const Net::Event& tEvent)
+	{
+		/* tEvent.iKey : 새로 들어온 클라이언트 (CPlayer는 로그인 패킷을 받은 뒤에 생성) */
+		m_isDirty = true;
+	}
+
+	void CServerApp::On_RejectConnect(const Net::Event& tEvent)
+	{
+		m_isDirty = true;
+	}
+
+	void CServerApp::On_ReceivePacket(const Net::Event& tEvent)
+	{
+		/* TODO: 헤더 꺼내서 Protocol::PACKET_TYPE 별로 switch (C_TO_S_LOGIN 등) */
+		Protocol::PACKET_TYPE tType = static_cast<Protocol::PACKET_TYPE>(tEvent.Get_PacketType());
+
+
+		switch (tType)
+		{
+		case Protocol::PACKET_TYPE::C_TO_S_LOGIN:
+
+			/* Client -> Server에게 본인 아이디를 줌 */
+
+			break;
+		case Protocol::PACKET_TYPE::END:			break;
+		default:									break;
+		}
+
+	}
+
+	void CServerApp::On_SendPacket(const Net::Event& tEvent)
+	{
+	}
+
+	void CServerApp::On_Disconnect(const Net::Event& tEvent)
+	{
+		/* TODO: tEvent.iKey의 CPlayer 정리 (방에서 빼기 등) */
 		m_isDirty = true;
 	}
 }

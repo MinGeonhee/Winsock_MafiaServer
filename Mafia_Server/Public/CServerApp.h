@@ -43,6 +43,14 @@ namespace MafiaServer
 		void	Key_Input();
 		void	Allow_Accept();
 	private:
+		/* ---- NetLib 콜백 (m_pMainServer->Pre_Update 안에서 불림 = 로직 스레드) ---- */
+		void	Register_NetEvents();
+		void	On_Connect(const Net::Event& tEvent);
+		void	On_RejectConnect(const Net::Event& tEvent);
+		void	On_ReceivePacket(const Net::Event& tEvent);
+		void	On_SendPacket(const Net::Event& tEvent);
+		void	On_Disconnect(const Net::Event& tEvent);
+	private:
 		inline static CServerApp* m_pInstance{ nullptr };
 	private:
 		/* 서버 관리 */

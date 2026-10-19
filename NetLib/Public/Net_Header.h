@@ -7,6 +7,9 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #include <cstdint>
+#include <functional>
+#include <array>
+
 
 #include "Funtion.h"
 #include "Enum.h"
@@ -16,6 +19,9 @@
 #include "CEventQueue.h"
 #include "CClient.h"
 #include "CServer.h"
+
+
+
 
 #ifdef _DEBUG
 #define NET_LOG(fmt, ...) printf("[Net] " fmt "\n", __VA_ARGS__)

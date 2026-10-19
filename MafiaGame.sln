@@ -9,7 +9,25 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Mafia_Server", "Mafia_Serve
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Mafia_Client", "Mafia_Client\Defualt\Mafia_Client.vcxproj", "{45E951FD-0D66-405A-A8D8-89917CC935FE}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Protocal", "Protocal", "{C8D5274F-AC00-46C7-1F8D-E88E81087A52}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Protocol", "Protocol", "{C8D5274F-AC00-46C7-1F8D-E88E81087A52}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Sturct", "Sturct", "{C2E3D5E7-F5FB-461E-8560-883B67B0FD09}"
+	ProjectSection(SolutionItems) = preProject
+		Protocal\Private\Struct.cpp = Protocal\Private\Struct.cpp
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Enum", "Enum", "{682110FC-581C-4AE6-9C84-EA36A232A5BF}"
+	ProjectSection(SolutionItems) = preProject
+		Protocal\Private\Enum.cpp = Protocal\Private\Enum.cpp
+		Protocal\Public\Enum.h = Protocal\Public\Enum.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Funtion", "Funtion", "{49104237-65A5-4D98-AB7D-60AD297FF474}"
+	ProjectSection(SolutionItems) = preProject
+		Protocal\Public\Funtion.h = Protocal\Public\Funtion.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{00CE0D54-29EC-4511-904A-388970C9C9E5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -46,6 +64,12 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C2E3D5E7-F5FB-461E-8560-883B67B0FD09} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{682110FC-581C-4AE6-9C84-EA36A232A5BF} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{49104237-65A5-4D98-AB7D-60AD297FF474} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{00CE0D54-29EC-4511-904A-388970C9C9E5} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B16F9348-D1F5-4955-830D-FF5A4CADDB17}

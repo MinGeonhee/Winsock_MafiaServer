@@ -53,6 +53,13 @@ namespace MafiaClient
 		const std::wstring&		Get_Nickname() const { return m_strNickname; }
 		const std::wstring&		Get_ServerText() const { return m_strServer; }
 		const Init_Data&		Get_InitData() const { return m_tInitData; }
+
+	private:
+		/* ---- NetLib 콜백 (m_pClient->Pre_Update 안에서 불림 = 로직 스레드) ---- */
+		void	Register_NetEvents();
+		void	On_ReceivePacket(const Net::Event& tEvent);
+		void	On_SendPacket(const Net::Event& tEvent);
+		void	On_Disconnect(const Net::Event& tEvent);
 	private:
 		std::unique_ptr<CScene>	Create_Scene(SCENE eScene);
 		void					Apply_SceneChange();
@@ -69,6 +76,7 @@ namespace MafiaClient
 
 		/* 서버 연결 (나) */
 		std::unique_ptr<Net::CClient>	m_pClient;
+		bool							m_isLostConnection{ false };	/* 끊김 표시 → Pre_Update 끝에서 정리 */
 		std::wstring					m_strNickname;
 		std::wstring					m_strServer;		/* "127.0.0.1:1234" 화면 표시용 */
 	};

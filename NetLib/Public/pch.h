@@ -16,7 +16,6 @@
 #include <queue>
 #include <string>
 
-
 /* Thread */
 #include <mutex>
 #include <atomic>

@@ -48,9 +48,13 @@ namespace MafiaClient
 				continue;
 			}
 
-			/* TODO: 여기서 C_LOGIN(닉네임) 보내고 S_LOGIN_ACK(내 ClientKey) 받기 */
 			const std::wstring strServer = ConsoleUI::Widen(tLogin.strIP) + L":" + std::to_wstring(tLogin.iPort);
 			m_pClientApp->Set_Connection(std::move(pClient), tLogin.strNickname, strServer);
+
+			/* Client 에서 Server에게 닉네임 전송하기 (요청만 쌓임 → 이번 프레임 Late_Update에서 실제 전송) */
+			Protocol::C_TO_S_LOGIN tLoginPacket{};
+			wcsncpy_s(tLoginPacket.wszNicName, tLogin.strNickname.c_str(), _TRUNCATE);
+			m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_LOGIN), tLoginPacket);
 			m_pClientApp->Change_Scene(MafiaClient::SCENE::LOBBY);
 
 			return;

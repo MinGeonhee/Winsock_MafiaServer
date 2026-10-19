@@ -30,5 +30,11 @@
 #include "Enum.h"
 
 
+/* Protocol */
+#include "../../Protocol/Public/Enum.h" 
+#include "../../Protocol/Public/Funtion.h" 
+#include "../../Protocol/Public/Struct.h" 
+
+
 #endif //PCH_H
 
