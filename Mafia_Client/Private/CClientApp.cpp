@@ -116,6 +116,12 @@ namespace MafiaClient
 		m_pClient->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Disconnect,		[this](const Net::Event& tEvent) { On_Disconnect(tEvent); });
 	}
 
+	void CClientApp::Register_NetEvents(Net::NET_EVENT_TYPE eType, Net::NetEventFuntion func)
+	{
+		if (m_pClient == nullptr) return;
+		m_pClient->Resigster_CallBackNetEvent(eType, func);
+	}
+
 	void CClientApp::On_ReceivePacket(const Net::Event& tEvent)
 	{
 		Protocol::PACKET_TYPE eType = static_cast<Protocol::PACKET_TYPE>(tEvent.Get_PacketType());

@@ -64,6 +64,7 @@ namespace MafiaClient
 		void	On_SendPacket(const Net::Event& tEvent);
 		void	On_Disconnect(const Net::Event& tEvent);
 		void	Register_DefaultNetEvents();
+		void	Register_NetEvents(Net::NET_EVENT_TYPE eType, Net::NetEventFuntion func);
 	private:
 		std::unique_ptr<CScene>	Create_Scene(SCENE eScene);
 		void					Apply_SceneChange();

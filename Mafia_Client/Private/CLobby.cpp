@@ -6,7 +6,7 @@
 namespace MafiaClient
 {
 	CLobby::CLobby()
-		: CScene(), m_tView{}, m_isDirty{ true }
+		: CScene(), m_tView{}, m_isDirty{ true } , m_vecPlayerInfos{}
 	{
 		m_eType = MafiaClient::SCENE::LOBBY;
 	}
@@ -27,12 +27,15 @@ namespace MafiaClient
 			{ 1, L"초보만 오세요", 3, 7, L"대기 중", false },
 			{ 2, L"빠른 한 판",    7, 7, L"게임 중 · 낮 2일차", true },
 		};
+
+
 		return S_OK;
 	}
 
 	void CLobby::Enter()
 	{
 		__super::Enter();
+		Request_PlayerInfos();
 
 		ConsoleUI::Set_CursorVisible(false);
 		ConsoleUI::Clear();
@@ -41,6 +44,7 @@ namespace MafiaClient
 
 	void CLobby::Exit()
 	{
+		m_vecPlayerInfos.clear();
 	}
 
 	void CLobby::Pre_Update()
@@ -62,6 +66,9 @@ namespace MafiaClient
 			case VK_RETURN:
 				/* TODO: 서버에 입장 요청 → 허락 오면 ROOM. 지금은 바로 이동 */
 				if (iRoomCount > 0) m_pClientApp->Change_Scene(MafiaClient::SCENE::ROOM);
+				break;
+			case 'R':
+				Request_PlayerInfos();		/* 새로고침 */
 				break;
 			case VK_ESCAPE:
 				m_pClientApp->Disconnect();
@@ -96,6 +103,64 @@ namespace MafiaClient
 		ConsoleUI::Render_Lobby(m_tView);
 	}
 
+	void CLobby::On_Packet(const Net::Event& tEvent)
+	{
+		Protocol::PACKET_TYPE ePacketType = static_cast<Protocol::PACKET_TYPE>(tEvent.Get_PacketType());
+		
+		switch (ePacketType)
+		{
+		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:
+		{
+			const Protocol::PROVIDE_DATA* pData = reinterpret_cast<const Protocol::PROVIDE_DATA*>(tEvent.Get_Body());
+			if (pData == nullptr) break;
+
+			/* 플레이어 정보라면 */
+			if (pData->eDataType == Protocol::DATA_TYPE::PLAYER_INFOS)
+			{
+				if (tEvent.Get_BodyLen() != sizeof(Protocol::PLAYER_INFOS)) break;		/* 크기 안 맞으면 버림 */
+				const Protocol::PLAYER_INFOS* pInfo = reinterpret_cast<const Protocol::PLAYER_INFOS*>(tEvent.Get_Body());
+				if (pInfo == nullptr) break;
+
+				const uint16_t iCount = (std::min)(pInfo->iCount, static_cast<uint16_t>(Protocol::MAX_ONLINE_PLAYER));	/* 서버 값도 범위 검사 */
+				size_t iCurSize = m_vecPlayerInfos.size();
+				m_vecPlayerInfos.resize(iCurSize + iCount);
+				memcpy(m_vecPlayerInfos.data() + iCurSize, pInfo->arr, iCount * sizeof(Protocol::PlayerInfo));
+
+				Apply_PlayerInfos();
+			}
+
+			break;
+		}
+		default:	break;
+		}
+
+	}
+
+	void CLobby::Request_PlayerInfos()
+	{
+		if (m_pClientApp->Get_Client() == nullptr) return;
+
+		m_vecPlayerInfos.clear();		/* 새 목록을 받을 거라 비움 (안 비우면 새로고침마다 같은 사람이 쌓임) */
+
+		Protocol::REQ_DATA tPacket{};
+		tPacket.eDataType = Protocol::DATA_TYPE::PLAYER_INFOS;
+		m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_REQ_DATA), tPacket);
+	}
+
+	void CLobby::Apply_PlayerInfos()
+	{
+		static const wchar_t* szState[] = { L"로비", L"방", L"게임" };
+
+		m_tView.vecPlayers.clear();
+		for (Protocol::PlayerInfo& tInfo : m_vecPlayerInfos)
+		{
+			tInfo.wszNickname[Protocol::MAX_NICNAME_BUF - 1] = L'\0';	/* 서버 값도 끝은 막아 둠 */
+			const std::wstring strState = (tInfo.eState < 3) ? szState[tInfo.eState] : L"?";
+			m_tView.vecPlayers.push_back({ tInfo.iKey, tInfo.wszNickname, strState });
+		}
+		m_isDirty = true;
+	}
+
 	std::unique_ptr<CLobby> CLobby::Create()
 	{
 		std::unique_ptr<CLobby> pScene{ new CLobby() };
@@ -106,7 +171,7 @@ namespace MafiaClient
 
 	void CLobby::Register_NetEventCallBack()
 	{
-		/* 기존 Default CallBack함수등록 */
 		m_pClientApp->Register_DefaultNetEvents();
+		m_pClientApp->Register_NetEvents(Net::NET_EVENT_TYPE::Receive_Packet, [this](const Net::Event& tEvent) {On_Packet(tEvent); });
 	}
 }

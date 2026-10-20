@@ -24,15 +24,15 @@ int main()
 	std::wstring strError;
 	while (true)
 	{
-		tData.tServerData.iPortNum = ConsoleUI::Run_StartupScreen(1234, strError);
+		tData.tServer_InitData.iPortNum = ConsoleUI::Run_StartupScreen(1234, strError);
 		if (SUCCEEDED(m_pCServerApp->Initialize(tData))) break;
 
-		strError = std::to_wstring(tData.tServerData.iPortNum) + L"번 포트를 열 수 없습니다. (이미 사용 중일 수 있음)";
+		strError = std::to_wstring(tData.tServer_InitData.iPortNum) + L"번 포트를 열 수 없습니다. (이미 사용 중일 수 있음)";
 	}
 	/* 윈도우 방화벽 설정 관련 쓰기 */
 
 	/* 서버 준비 중 로딩 2초 */
-	ConsoleUI::Run_Loading(static_cast<uint16_t>(tData.tServerData.iPortNum), 2000);
+	ConsoleUI::Run_Loading(static_cast<uint16_t>(tData.tServer_InitData.iPortNum), 2000);
 
 	while (true)
 	{

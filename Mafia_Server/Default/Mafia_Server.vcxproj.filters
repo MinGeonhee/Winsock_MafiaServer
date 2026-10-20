@@ -34,11 +34,14 @@
     <Filter Include="소스 파일\01. Core\00. Server">
       <UniqueIdentifier>{9058a71b-5689-4fee-9f37-098bd647549b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="소스 파일\02. Logic\00. CServerApp">
-      <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
-    </Filter>
     <Filter Include="소스 파일\01. Core\02. Player">
       <UniqueIdentifier>{a32e3ed9-2b14-4935-9f51-2463630fab2d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\02. Logic\00. ServerApp">
+      <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\02. Logic\01. PlayerManager">
+      <UniqueIdentifier>{da348bf5-abac-4085-9f5a-d1e2920d8ba4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -46,7 +49,7 @@
       <Filter>헤더 파일\Pch</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\CServerApp.cpp">
-      <Filter>소스 파일\02. Logic\00. CServerApp</Filter>
+      <Filter>소스 파일\02. Logic\00. ServerApp</Filter>
     </ClCompile>
     <ClCompile Include="Mafia_Server.cpp">
       <Filter>소스 파일\00. Main</Filter>
@@ -54,19 +57,25 @@
     <ClCompile Include="..\Private\Struct.cpp">
       <Filter>헤더 파일\Struct</Filter>
     </ClCompile>
+    <ClCompile Include="..\Private\CPlayerManager.cpp">
+      <Filter>소스 파일\02. Logic\01. PlayerManager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\pch.h">
       <Filter>헤더 파일\Pch</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CServerApp.h">
-      <Filter>소스 파일\02. Logic\00. CServerApp</Filter>
+      <Filter>소스 파일\02. Logic\00. ServerApp</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\Struct.h">
       <Filter>헤더 파일\Struct</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ConsoleUI\ConsoleUI.h">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CPlayerManager.h">
+      <Filter>소스 파일\02. Logic\01. PlayerManager</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

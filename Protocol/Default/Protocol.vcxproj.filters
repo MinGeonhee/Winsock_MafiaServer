@@ -1,21 +1,66 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Public"><UniqueIdentifier>{7fef52e4-0126-48fe-b5b2-fdf606ed72bc}</UniqueIdentifier></Filter>
-    <Filter Include="Private"><UniqueIdentifier>{12ec71d7-7bfd-4a70-bf11-84c06c7d74ea}</UniqueIdentifier></Filter>
+    <Filter Include="Header">
+      <UniqueIdentifier>{410a1fac-c710-4eb1-9ac0-52fc6573c19a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header\Struct">
+      <UniqueIdentifier>{24764a4f-f205-4b12-bd28-dc9336a5d311}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header\Enum">
+      <UniqueIdentifier>{2a803f33-bb9a-4d0c-bce8-42ddda825fa0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header\Function">
+      <UniqueIdentifier>{470bd744-e2bc-4b09-b3ae-ae96e91c2e48}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header\Pch">
+      <UniqueIdentifier>{f0db6913-fe2b-4887-8fd4-0d418ec69393}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{edc30e67-0da4-4481-b99e-21e601ab6c41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Logic">
+      <UniqueIdentifier>{214195dd-3530-4610-860a-af06c1e47025}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Player">
+      <UniqueIdentifier>{89f91532-8753-4837-9f4d-62649d867cb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Chat">
+      <UniqueIdentifier>{0487a972-82f8-4a36-a8ff-1c74ac589e1f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Public\CPlayer.h"><Filter>Public</Filter></ClInclude>
-    <ClInclude Include="..\Public\Enum.h"><Filter>Public</Filter></ClInclude>
-    <ClInclude Include="..\Public\Funtion.h"><Filter>Public</Filter></ClInclude>
-    <ClInclude Include="..\Public\pch.h"><Filter>Public</Filter></ClInclude>
-    <ClInclude Include="..\Public\Protocol_Header.h"><Filter>Public</Filter></ClInclude>
-    <ClInclude Include="..\Public\Struct.h"><Filter>Public</Filter></ClInclude>
+    <ClInclude Include="..\Public\Struct.h">
+      <Filter>Header\Struct</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\Enum.h">
+      <Filter>Header\Enum</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\Funtion.h">
+      <Filter>Header\Function</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\pch.h">
+      <Filter>Header\Pch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\Protocol_Header.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CPlayer.h">
+      <Filter>Core\Player</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Private\CPlayer.cpp"><Filter>Private</Filter></ClCompile>
-    <ClCompile Include="..\Private\Enum.cpp"><Filter>Private</Filter></ClCompile>
-    <ClCompile Include="..\Private\Struct.cpp"><Filter>Private</Filter></ClCompile>
-    <ClCompile Include="..\Private\pch.cpp"><Filter>Private</Filter></ClCompile>
+    <ClCompile Include="..\Private\Struct.cpp">
+      <Filter>Header\Struct</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\Enum.cpp">
+      <Filter>Header\Enum</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\pch.cpp">
+      <Filter>Header\Pch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CPlayer.cpp">
+      <Filter>Core\Player</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

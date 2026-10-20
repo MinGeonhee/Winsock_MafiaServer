@@ -643,12 +643,21 @@ namespace ConsoleUI
 		bool			isPlaying{ false };	// 게임 중이면 회색으로
 	};
 
+	/* 접속 중 목록 한 줄 (서버가 보내준 플레이어 정보를 화면용으로) */
+	struct MemberView
+	{
+		uint64_t		iKey{ 0 };			// 서버 고유 번호 (#1)
+		std::wstring	strName;
+		std::wstring	strState;			// "로비", "방", "게임" 등
+	};
+
 	struct LobbyView
 	{
 		std::wstring				strNickname;	// 내 닉네임 (접속 중 목록에서 "(나)" 표시)
 		uint64_t					iMyKey{ 0 };	// 서버가 정해준 내 번호 (0 = 아직 못 받음)
 		std::wstring				strServer;		// "127.0.0.1:1234"
-		std::vector<std::wstring>	vecMembers;		// 접속 중인 사람 이름
+		std::vector<std::wstring>	vecMembers;		// 접속 중인 사람 이름 (vecPlayers가 비었을 때만 사용)
+		std::vector<MemberView>		vecPlayers;		// 접속 중인 플레이어 (번호 · 닉네임 · 상태). 있으면 이걸 그림
 		std::vector<RoomView>		vecRooms;
 		int							iSelected{ 0 };	// 선택된 방 인덱스 (vecRooms 기준). ↑↓ 처리는 호출하는 쪽에서
 	};
@@ -657,7 +666,9 @@ namespace ConsoleUI
 	inline void Render_Lobby(const LobbyView& tView)
 	{
 		using namespace Color;
-		constexpr int ROOM_W = 64, MEMBER_W = 24, LIST_ROWS = 9;
+		constexpr int ROOM_W = 64, MEMBER_W = 30, LIST_ROWS = 9;
+		const bool		isPlayerMode = !tView.vecPlayers.empty();
+		const size_t	iMemberCount = isPlayerMode ? tView.vecPlayers.size() : tView.vecMembers.size();
 
 		/* 상단: 로고 + 오른쪽 환영 문구 */
 		const std::wstring strSide[6] = {
@@ -666,20 +677,19 @@ namespace ConsoleUI
 				+ (tView.iMyKey != 0 ? std::wstring(Yellow) + L"#" + std::to_wstring(tView.iMyKey) + Reset
 									 : std::wstring(Gray) + L"번호 받는 중…" + Reset),
 			std::wstring(Gray) + L"서버  " + tView.strServer + Reset,
-			std::wstring(Green) + L"●" + Reset + Gray + L" 접속 중  " + std::to_wstring(tView.vecMembers.size()) + L"명" + Reset,
+			std::wstring(Green) + L"●" + Reset + Gray + L" 접속 중  " + std::to_wstring(iMemberCount) + L"명" + Reset,
 			L"", L"" };
 
 		std::wstring str = L"\x1b[H\x1b[K\n";
 		for (int i = 0; i < 6; ++i) str += L"  " + Logo_Line(i) + L"      " + strSide[i] + L"\x1b[K\n";
 		str += L"  "; str += Gray; str += std::wstring(ROOM_W + MEMBER_W + 6, L'─'); str += Reset; str += L"\x1b[K\n\x1b[K\n";
-
 		/* 박스 제목 줄 */
 		auto Top = [&](const std::wstring& strTitle, int iW)
 		{
 			return std::wstring(Gray) + L"┌─" + Reset + Bold + strTitle + Reset + Gray + std::wstring(iW - 1 - Width(strTitle), L'─') + L"┐" + Reset;
 		};
 		str += L"  " + Top(L" 방 목록 (" + std::to_wstring(tView.vecRooms.size()) + L") ", ROOM_W) + L"  "
-			 + Top(L" 접속 중 (" + std::to_wstring(tView.vecMembers.size()) + L") ", MEMBER_W) + L"\x1b[K\n";
+			 + Top(L" 접속 중 (" + std::to_wstring(iMemberCount) + L") ", MEMBER_W) + L"\x1b[K\n";
 
 		/* 선택한 방이 보이도록 스크롤 */
 		const int iRoomCount = static_cast<int>(tView.vecRooms.size());
@@ -707,8 +717,22 @@ namespace ConsoleUI
 
 			/* 접속 중 목록: 머리글 줄부터 이름을 채움 */
 			std::wstring strMember = Spaces(MEMBER_W);
+			if (isPlayerMode)
+			{
+				/* 번호 · 닉네임 · 상태 (머리글 줄 + 플레이어). 나는 노란 번호 + 굵게 */
+				if (iRow == -1)
+					strMember = std::wstring(Gray) + Fit(L" 번호 닉네임           상태", MEMBER_W) + Reset;
+				else if (iRow < static_cast<int>(tView.vecPlayers.size()))
+				{
+					const MemberView& tMember = tView.vecPlayers[iRow];
+					const bool isMe = (tMember.iKey == tView.iMyKey);
+					strMember = L" " + (isMe ? std::wstring(Yellow) + Bold : std::wstring(Gray)) + Fit(L"#" + std::to_wstring(tMember.iKey), 5) + Reset
+							  + (isMe ? std::wstring(Bold) : std::wstring()) + Fit(tMember.strName, 17) + Reset
+							  + Gray + Fit(tMember.strState, MEMBER_W - 1 - 5 - 17) + Reset;
+				}
+			}
 			const int iMember = iRow + 1;
-			if (iMember < static_cast<int>(tView.vecMembers.size()))
+			if (!isPlayerMode && iMember < static_cast<int>(tView.vecMembers.size()))
 			{
 				const std::wstring& strName = tView.vecMembers[iMember];
 				strMember = (strName == tView.strNickname)

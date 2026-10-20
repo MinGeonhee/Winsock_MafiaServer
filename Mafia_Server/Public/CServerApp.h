@@ -1,11 +1,10 @@
 ﻿#pragma once
-
+#include "CPlayerManager.h"
 
 namespace Net
 {
 	class CServer;
 }
-
 
 namespace MafiaServer
 {
@@ -14,7 +13,8 @@ namespace MafiaServer
 	public:
 		struct Init_Data
 		{
-			Net::CServer::Init_Data tServerData{};
+			Net::CServer::Init_Data		tServer_InitData{};
+			CPlayerManager::Init_Data	tPlayerManager_InitData{};
 		};
 	private:
 		explicit CServerApp();
@@ -51,11 +51,16 @@ namespace MafiaServer
 		void	On_SendPacket(const Net::Event& tEvent);
 		void	On_Disconnect(const Net::Event& tEvent);
 	private:
+		void	Handle_RequestData(const Net::Event& tEvent);
+	private:
 		inline static CServerApp* m_pInstance{ nullptr };
 	private:
+		/* Player Manager */
+		CPlayerManager*				 m_pPlayerManager;
+
 		/* 서버 관리 */
 		std::unique_ptr<Net::CServer> m_pMainServer;
-		bool	 m_isDirty;	// 바뀐 게 있을 때만 다시 그림
+		bool						  m_isDirty;	// 바뀐 게 있을 때만 다시 그림
 	};
 }
 

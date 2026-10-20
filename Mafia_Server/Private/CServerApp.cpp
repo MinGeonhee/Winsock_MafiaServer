@@ -4,14 +4,23 @@
 #include "CServer.h"
 #include "ConsoleUI.h"
 #include "ConsoleUI_Server.h"
+#include "CPlayerManager.h"
 
 namespace MafiaServer
 {
 	CServerApp::CServerApp()
-		: m_pMainServer{nullptr} , m_isDirty{false}
+		: m_pMainServer{nullptr} , m_isDirty{false} , m_pPlayerManager{}
 	{
 	}
 	CServerApp::~CServerApp()
+	{
+	}
+
+	CPlayerManager::CPlayerManager()
+	{
+	}
+
+	CPlayerManager::~CPlayerManager()
 	{
 	}
 
@@ -27,14 +36,18 @@ namespace MafiaServer
 		Net::Net_Init();
 
 		/* Server 만들고 초기화 */
-		m_pMainServer = Net::CServer::Create(tData.tServerData);
+		m_pMainServer = Net::CServer::Create(tData.tServer_InitData);
 		if (m_pMainServer == nullptr) return E_FAIL;
-
 		Register_NetEvents();
 
 
+		/* Player Manager 만들기 */
+		m_pPlayerManager = CPlayerManager::Get_Instance();
+		if (FAILED(m_pPlayerManager->Initialize(tData.tPlayerManager_InitData))) return E_FAIL;
+
 		return S_OK;
 	}
+
 
 	void CServerApp::Pre_Update()
 	{
@@ -132,6 +145,9 @@ namespace MafiaServer
 				Protocol::S_TO_C_LOGIN tLoginBody{};
 				tLoginBody.iClientKey = tEvent.iKey;
 				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_LOGIN), tLoginBody);
+
+				if (m_pPlayerManager->LogIn_Player(tEvent.iKey, tPacket.tData.wszNicName) == false) break;
+
 				break;
 			}
 			case Protocol::CHECK_NAME::EMPTY:
@@ -146,8 +162,13 @@ namespace MafiaServer
 			}
 			default:break;
 			}
-		}
 			break;
+		}
+		case Protocol::PACKET_TYPE::C_TO_S_REQ_DATA:
+		{
+			Handle_RequestData(tEvent);
+			break;
+		}
 		case Protocol::PACKET_TYPE::END:			break;
 		default:									break;
 		}
@@ -160,8 +181,34 @@ namespace MafiaServer
 	void CServerApp::On_Disconnect(const Net::Event& tEvent)
 	{
 		/* TODO: tEvent.iKey의 CPlayer 정리 (방에서 빼기 등) */
+		if (m_pPlayerManager->LogOut_Player(tEvent.iKey) == false) return;
 		m_isDirty = true;
 	}
 
+	void CServerApp::Handle_RequestData(const Net::Event& tEvent)
+	{
 
+		uint16_t iLen = tEvent.Get_BodyLen();
+		if (iLen != sizeof(Protocol::REQ_DATA)) return;
+		Net::Packet<Protocol::REQ_DATA> tPacket{};
+		memcpy(&tPacket.tData, tEvent.Get_Body(), sizeof(Protocol::REQ_DATA));
+
+		/* 플레이어 목록 요청 */
+		if (tPacket.tData.eDataType == Protocol::DATA_TYPE::PLAYER_INFOS)
+		{
+			std::vector<Protocol::PlayerInfo> vec = std::move(m_pPlayerManager->Get_PlayerInfos());
+			size_t iPre{ 0 };
+			/* 최대값을 나눠서 진행 */
+			while (iPre < vec.size())
+			{
+				/* Info 복사 */
+				Protocol::PLAYER_INFOS tBody{};
+				tBody.eDataType = Protocol::DATA_TYPE::PLAYER_INFOS;
+				tBody.iCount = static_cast<uint16_t>((std::min)(vec.size() - iPre, Protocol::MAX_ONLINE_PLAYER));
+				memcpy(tBody.arr , vec.data() + iPre , tBody.iCount * sizeof(Protocol::PlayerInfo));
+				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tBody);
+				iPre += tBody.iCount;
+			}
+		}
+	}
 }
