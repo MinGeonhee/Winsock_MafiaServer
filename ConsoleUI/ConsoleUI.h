@@ -491,7 +491,7 @@ namespace ConsoleUI
 
 					/* 오류 메시지 + 조작 안내 */
 					str += strMsg.empty() ? std::wstring(L"\x1b[K\n")
-										  : Center_Pad(L"✖ " + strMsg, iCols) + Red + L"✖ " + strMsg + Reset + L"\x1b[K\n";
+										  : Center_Pad(L"! " + strMsg, iCols) + Red + L"! " + strMsg + Reset + L"\x1b[K\n";
 					std::wstring strHelpPlain, strHelpColored;
 					for (size_t i = 0; i < tText.vecHelp.size(); ++i)
 					{
@@ -600,7 +600,7 @@ namespace ConsoleUI
 		}
 
 		/* 완료 표시 잠깐 */
-		const std::wstring strDone = L"✔ " + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 접속 완료";
+		const std::wstring strDone = L"" + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 접속 완료";
 		Write(L"\x1b[" + std::to_wstring(Detail::g_iStatusRow) + L";1H\x1b[K" + Center_Pad(strDone, iCols) + Green + strDone + Reset);
 		Sleep(400);
 
@@ -789,7 +789,7 @@ namespace ConsoleUI
 			str += Gray; str += L"  (1024 ~ 65535, Enter = "; str += std::to_wstring(iDefaultPort); str += L")"; str += Reset; str += L"\x1b[K\n";
 			if (!strMsg.empty())
 			{
-				str += L"  "; str += Red; str += L"✖ "; str += strMsg; str += Reset; str += L"\x1b[K\n";
+				str += L"  "; str += Red; str += L"! "; str += strMsg; str += Reset; str += L"\x1b[K\n";
 			}
 			str += L"  "; str += Yellow; str += L"> "; str += Reset; str += L"\x1b[J";
 
