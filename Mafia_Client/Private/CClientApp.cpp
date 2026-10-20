@@ -4,6 +4,7 @@
 #include "ConsoleUI.h"
 #include "CScene.h"
 #include "CIntro.h"
+#include "CConnect.h"
 #include "CLogin.h"
 #include "CLobby.h"
 #include "CRoom.h"
@@ -13,7 +14,7 @@ namespace MafiaClient
 {
 	CClientApp::CClientApp()
 		: m_tInitData{}, m_isRunning{ true }
-		, m_pScene{ nullptr }, m_eCurScene{ MafiaClient::SCENE::END }, m_eNextScene{ MafiaClient::SCENE::INTRO }
+		, m_pScene{ nullptr }, m_eCurScene{ MafiaClient::SCENE::END }, m_queueSceneRequests{}
 		, m_pClient{ nullptr }
 	{
 	}
@@ -42,6 +43,7 @@ namespace MafiaClient
 		ConsoleUI::Init(L"Mafia Client");
 
 		/* 첫 Scene(INTRO)을 바로 만들어 둠 */
+		Change_Scene(MafiaClient::SCENE::INTRO);
 		Apply_SceneChange();
 		return m_pScene ? S_OK : E_FAIL;
 	}
@@ -54,10 +56,9 @@ namespace MafiaClient
 		if (m_isLostConnection)
 		{
 			Disconnect();
-			Change_Scene(MafiaClient::SCENE::LOGIN);
+			Change_Scene(MafiaClient::SCENE::CONNECT);		/* 연결이 없으면 접속 화면부터 */
 		}
 
-		Apply_SceneChange();
 		if (m_pScene) m_pScene->Pre_Update();
 	}
 
@@ -78,15 +79,19 @@ namespace MafiaClient
 	void CClientApp::Render()
 	{
 		if (m_pScene) m_pScene->Render();
+
+		/* 프레임 맨 끝 (Render까지 다 끝난 뒤)에서만 Scene 교체
+		   → 이번 프레임 도중에는 어떤 Scene도 지워지지 않음 */
+		Apply_SceneChange();
 	}
 
-	void CClientApp::Set_Connection(std::unique_ptr<Net::CClient> pClient, const std::wstring& strNickname, const std::wstring& strServer)
+	void CClientApp::Set_Connection(std::unique_ptr<Net::CClient> pClient, const std::wstring& strServer)
 	{
 		m_pClient = std::move(pClient);
-		m_strNickname = strNickname;
+		m_strNickname.clear();		/* 닉네임은 로그인 성공 후 Set_Nickname */
 		m_strServer = strServer;
 
-		Register_NetEvents();
+		Register_DefaultNetEvents();
 	}
 
 	void CClientApp::Disconnect()
@@ -95,7 +100,13 @@ namespace MafiaClient
 		m_isLostConnection = false;
 	}
 
-	void CClientApp::Register_NetEvents()
+	void CClientApp::Clear_NetEvents()
+	{
+		if (m_pClient == nullptr) return;
+		m_pClient->Clear_CallBackNetEvent();
+	}
+
+	void CClientApp::Register_DefaultNetEvents()
 	{
 		if (m_pClient == nullptr) return;
 
@@ -116,7 +127,6 @@ namespace MafiaClient
 			break;
 		default:	break;
 		}
-
 	}
 
 	void CClientApp::On_SendPacket(const Net::Event& tEvent)
@@ -135,6 +145,7 @@ namespace MafiaClient
 		switch (eScene)
 		{
 		case SCENE::INTRO:	return CIntro::Create();
+		case SCENE::CONNECT:return CConnect::Create();
 		case SCENE::LOGIN:	return CLogin::Create();
 		case SCENE::LOBBY:	return CLobby::Create();
 		case SCENE::ROOM:	return CRoom::Create();
@@ -145,14 +156,21 @@ namespace MafiaClient
 
 	void CClientApp::Apply_SceneChange()
 	{
-		if (m_eNextScene == m_eCurScene) return;
+		/* 한 프레임에 요청이 여러 번 오면 마지막 요청만 적용
+		   (중간 Scene을 만들었다 바로 지우면 Enter가 두 번 돌아 화면·등록이 꼬임) */
+		if (m_queueSceneRequests.empty()) return;
 
-		std::unique_ptr<CScene> pNext = Create_Scene(m_eNextScene);
-		if (pNext == nullptr) { m_eNextScene = m_eCurScene; return; }	/* 만들기 실패 → 현재 Scene 유지 */
+		MafiaClient::SCENE eNext = m_queueSceneRequests.back();
+		while (!m_queueSceneRequests.empty()) m_queueSceneRequests.pop();
+
+		if (eNext == m_eCurScene) return;
+
+		std::unique_ptr<CScene> pNext = Create_Scene(eNext);
+		if (pNext == nullptr) return;	/* 만들기 실패 → 현재 Scene 유지 */
 
 		if (m_pScene) m_pScene->Exit();
 		m_pScene = std::move(pNext);
-		m_eCurScene = m_eNextScene;
+		m_eCurScene = eNext;
 		m_pScene->Enter();
 	}
 }

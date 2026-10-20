@@ -109,18 +109,48 @@ namespace MafiaServer
 		/* TODO: 헤더 꺼내서 Protocol::PACKET_TYPE 별로 switch (C_TO_S_LOGIN 등) */
 		Protocol::PACKET_TYPE tType = static_cast<Protocol::PACKET_TYPE>(tEvent.Get_PacketType());
 
-
 		switch (tType)
 		{
 		case Protocol::PACKET_TYPE::C_TO_S_LOGIN:
+		/* Client -> Server에게 본인 아이디를 줌 */
+		{
+			if (tEvent.Is_NetPacket()) return;
 
-			/* Client -> Server에게 본인 아이디를 줌 */
+			uint16_t iLen = tEvent.Get_BodyLen();
+			if (iLen != sizeof(Protocol::C_TO_S_LOGIN)) break;
+			Net::Packet<Protocol::C_TO_S_LOGIN> tPacket{};
+			memcpy(&tPacket.tData, tEvent.Get_Body(),iLen);
 
+			/* 닉네임 체크하기 */
+			Protocol::CHECK_NAME eCheck =  Protocol::Is_VailedNickName(tPacket.tData.wszNicName);
+
+			switch (eCheck)
+			{
+			case Protocol::CHECK_NAME::OK:
+			{
+				/* OK 라면 Client 번호 연결 시켜주기 */
+				Protocol::S_TO_C_LOGIN tLoginBody{};
+				tLoginBody.iClientKey = tEvent.iKey;
+				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_LOGIN), tLoginBody);
+				break;
+			}
+			case Protocol::CHECK_NAME::EMPTY:
+			case Protocol::CHECK_NAME::OVER:
+			case Protocol::CHECK_NAME::INVALID_CHARACTER:
+			{
+				/* 로그인 실패 이유 보내주기 */
+				Protocol::S_TO_C_LOGIN_FAILED tLoginFailedBody{};
+				tLoginFailedBody.eFailedType = eCheck;
+				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_LOGIN_FAILED), tLoginFailedBody);
+				break;
+			}
+			default:break;
+			}
+		}
 			break;
 		case Protocol::PACKET_TYPE::END:			break;
 		default:									break;
 		}
-
 	}
 
 	void CServerApp::On_SendPacket(const Net::Event& tEvent)
@@ -132,4 +162,6 @@ namespace MafiaServer
 		/* TODO: tEvent.iKey의 CPlayer 정리 (방에서 빼기 등) */
 		m_isDirty = true;
 	}
+
+
 }

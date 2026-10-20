@@ -365,147 +365,271 @@ namespace ConsoleUI
 		}
 	}
 
-	/* ---------------- 로그인 (가운데 카드) ---------------- */
-	struct LoginResult
+	/* ---------------- 입력 카드 (서버 접속 / 로그인 공용) ---------------- */
+	namespace Detail
 	{
-		bool			isOk{ false };		// Esc로 나가면 false
-		std::wstring	strNickname;
-		std::string		strIP;
-		uint16_t		iPort{ 0 };
-	};
+		enum class FIELD_KIND { NICK, IP, PORT };
 
-	/* 닉네임 / 서버 IP / 포트 입력. Tab·↑↓ 칸 이동, Enter 접속, Esc 종료
-	   strError : 이전 접속 실패 사유 등을 빨간 줄로 보여줄 때 사용 */
-	inline LoginResult Run_Login(const std::wstring& strDefaultIP = L"127.0.0.1", uint16_t iDefaultPort = 1234, const std::wstring& strError = L"")
-	{
-		using namespace Color;
-		constexpr int	BOX_W = 44, FIELD_W = 26, MAX_NICK_W = 16;	// 닉네임 최대 16칸 (한글 8자)
-		const wchar_t*	szLabel[3] = { L"닉네임 ", L"서버 IP", L"포트   " };
-
-		std::wstring	strField[3] = { L"", strDefaultIP, std::to_wstring(iDefaultPort) };
-		int				iFocus{ 0 };
-		std::wstring	strMsg = strError;
-		bool			isDirty{ true };
-
-		Set_CursorVisible(false);
-		Clear();
-		FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
-
-		while (true)
+		struct FormField
 		{
-			/* ---- 입력 ---- */
-			for (const KEY_EVENT_RECORD& tKey : Poll_Keys(true))
-			{
-				isDirty = true;
-				std::wstring& strCur = strField[iFocus];
-				const wchar_t ch = tKey.uChar.UnicodeChar;
+			const wchar_t*	szLabel;		// 7칸 폭으로 맞춘 라벨 ("닉네임 ", "서버 IP", "포트   ")
+			std::wstring	strValue;
+			FIELD_KIND		eKind;
+		};
 
-				if (tKey.wVirtualKeyCode == VK_ESCAPE) { Set_CursorVisible(true); return {}; }
-				else if (tKey.wVirtualKeyCode == VK_TAB || tKey.wVirtualKeyCode == VK_DOWN) iFocus = (iFocus + 1) % 3;
-				else if (tKey.wVirtualKeyCode == VK_UP) iFocus = (iFocus + 2) % 3;
-				else if (tKey.wVirtualKeyCode == VK_BACK)
+		struct FormText
+		{
+			std::wstring	strTitle;		// 카드 위 테두리 제목 (" 로 그 인 ")
+			std::wstring	strInfo;		// 로고 아래 회색 한 줄 (비면 기본 부제)
+			std::wstring	strButton;		// "  Enter  접속하기  "
+			std::vector<std::pair<std::wstring, std::wstring>> vecHelp;	// { "[Tab]", "다음 칸" } ...
+		};
+
+		inline int g_iStatusRow{ 0 };		// Show_Status가 그릴 줄 (마지막으로 그린 카드의 메시지 줄)
+
+		/* 칸마다 받을 수 있는 글자 제한 */
+		inline bool Accept_Char(FIELD_KIND eKind, const std::wstring& strCur, wchar_t ch, size_t iMaxNickLen)
+		{
+			switch (eKind)
+			{
+			case FIELD_KIND::NICK:	return ch != L' ' && strCur.size() < iMaxNickLen;
+			case FIELD_KIND::IP:	return (iswdigit(ch) || ch == L'.') && strCur.size() < 15;
+			case FIELD_KIND::PORT:	return iswdigit(ch) && strCur.size() < 5;
+			}
+			return false;
+		}
+
+		/* 입력 카드 하나 띄우고 Enter(검사 통과) = true, Esc = false
+		   fnValidate : 문제 있으면 메시지를 돌려주고 iFocus를 그 칸으로 (문제 없으면 빈 문자열) */
+		inline bool Run_Form(const FormText& tText, std::vector<FormField>& vecFields, const std::wstring& strError, size_t iMaxNickLen,
+							 const std::function<std::wstring(const std::vector<FormField>&, int&)>& fnValidate)
+		{
+			using namespace Color;
+			constexpr int	BOX_W = 44, FIELD_W = 26;
+			const int		iFieldCount = static_cast<int>(vecFields.size());
+
+			int				iFocus{ 0 };
+			std::wstring	strMsg = strError;
+			bool			isDirty{ true };
+
+			Set_CursorVisible(false);
+			Clear();
+			FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+
+			while (true)
+			{
+				/* ---- 입력 ---- */
+				for (const KEY_EVENT_RECORD& tKey : Poll_Keys(true))
 				{
-					if (!strCur.empty()) strCur.pop_back();
-					if (!strCur.empty() && strCur.back() >= 0xD800 && strCur.back() <= 0xDBFF) strCur.pop_back();	// 이모지 반쪽 정리
-				}
-				else if (tKey.wVirtualKeyCode == VK_RETURN)
-				{
-					/* ---- 검사 ---- */
-					IN_ADDR tAddr{};
-					const uint16_t iPort = Parse_Port(strField[2]);
-					if (strField[0].empty())								{ strMsg = L"닉네임을 입력하세요."; iFocus = 0; }
-					else if (InetPtonW(AF_INET, strField[1].c_str(), &tAddr) != 1)	{ strMsg = L"서버 IP 형식이 올바르지 않습니다. (예: 192.168.0.5)"; iFocus = 1; }
-					else if (iPort == 0)									{ strMsg = L"포트는 1024 ~ 65535 사이 숫자입니다."; iFocus = 2; }
-					else
+					isDirty = true;
+					std::wstring& strCur = vecFields[iFocus].strValue;
+					const wchar_t ch = tKey.uChar.UnicodeChar;
+
+					if (tKey.wVirtualKeyCode == VK_ESCAPE) { Set_CursorVisible(true); return false; }
+					else if (tKey.wVirtualKeyCode == VK_TAB || tKey.wVirtualKeyCode == VK_DOWN) iFocus = (iFocus + 1) % iFieldCount;
+					else if (tKey.wVirtualKeyCode == VK_UP) iFocus = (iFocus + iFieldCount - 1) % iFieldCount;
+					else if (tKey.wVirtualKeyCode == VK_BACK)
 					{
-						std::string strIP;		// 숫자와 '.'만 입력받았으므로 그대로 좁혀도 안전
-						for (wchar_t c : strField[1]) strIP += static_cast<char>(c);
-						Set_CursorVisible(true);
-						return { true, strField[0], strIP, iPort };
+						if (!strCur.empty()) strCur.pop_back();
+						if (!strCur.empty() && strCur.back() >= 0xD800 && strCur.back() <= 0xDBFF) strCur.pop_back();	// 이모지 반쪽 정리
 					}
+					else if (tKey.wVirtualKeyCode == VK_RETURN)
+					{
+						strMsg = fnValidate ? fnValidate(vecFields, iFocus) : std::wstring();
+						if (strMsg.empty()) { Set_CursorVisible(true); return true; }
+					}
+					else if (ch >= 32 && Accept_Char(vecFields[iFocus].eKind, strCur, ch, iMaxNickLen))
+						strCur += ch;
 				}
-				else if (ch >= 32)
+
+				/* ---- 그리기 (바뀐 게 있거나 창 크기가 바뀌었을 때만) ---- */
+				if (isDirty || Need_Redraw())
 				{
-					/* 칸마다 받을 수 있는 글자 제한 */
-					if (iFocus == 0 && ch != L' ' && Width(strCur + ch) <= MAX_NICK_W)			strCur += ch;
-					else if (iFocus == 1 && (iswdigit(ch) || ch == L'.') && strCur.size() < 15)	strCur += ch;
-					else if (iFocus == 2 && iswdigit(ch) && strCur.size() < 5)					strCur += ch;
+					isDirty = false;
+					int iCols{ 0 }, iRows{ 0 };
+					Get_ConsoleSize(iCols, iRows);
+					const std::wstring strLogoLeft = Spaces((iCols - LOGO_W) / 2);
+					const std::wstring strBoxLeft = Spaces((iCols - BOX_W - 2) / 2);
+					const std::wstring strSubtitle = tText.strInfo.empty() ? L"7인 마피아 게임 · CMD Edition" : tText.strInfo;
+
+					std::wstring str = L"\x1b[H\x1b[K\n";
+					for (int i = 0; i < 6; ++i) str += strLogoLeft + Logo_Line(i) + L"\x1b[K\n";
+					str += Center_Pad(strSubtitle, iCols); str += Gray; str += strSubtitle; str += Reset; str += L"\x1b[K\n\x1b[K\n";
+
+					/* 상단 테두리: ┌──── 제목 ────┐ */
+					const int iLeftLine = (BOX_W - Width(tText.strTitle)) / 2;
+					str += strBoxLeft; str += Gray; str += L"┌"; str += std::wstring(iLeftLine, L'─'); str += Reset;
+					str += Bold; str += tText.strTitle; str += Reset;
+					str += Gray; str += std::wstring(BOX_W - iLeftLine - Width(tText.strTitle), L'─'); str += L"┐"; str += Reset; str += L"\x1b[K\n";
+
+					auto Row = [&](const std::wstring& strColored, int iPlainWidth)
+					{
+						return strBoxLeft + Gray + L"│" + Reset + strColored + Spaces(BOX_W - iPlainWidth) + Gray + L"│" + Reset + L"\x1b[K\n";
+					};
+
+					str += Row(L"", 0);
+					for (int i = 0; i < iFieldCount; ++i)
+					{
+						const FormField& tField = vecFields[i];
+						const bool isFocus = (i == iFocus);
+						std::wstring strLine = isFocus ? std::wstring(L"  ") + Yellow + L"▸ " + Reset + Bold + tField.szLabel + Reset
+													   : std::wstring(L"    ") + Gray + tField.szLabel + Reset;
+						strLine += L"  ";
+						const int iTextW = Width(tField.strValue);
+						if (isFocus)
+							strLine += std::wstring(FIELD) + L" " + tField.strValue + CURSOR + L" " + Reset + FIELD + Spaces(FIELD_W - 2 - iTextW) + Reset;
+						else
+							strLine += L" " + Fit(tField.strValue, FIELD_W - 1);
+						str += Row(strLine, 4 + Width(tField.szLabel) + 2 + FIELD_W);
+					}
+					str += Row(L"", 0);
+
+					const int iButtonLeft = (BOX_W - Width(tText.strButton)) / 2;
+					str += Row(Spaces(iButtonLeft) + SELECT + tText.strButton + Reset, iButtonLeft + Width(tText.strButton));
+					str += Row(L"", 0);
+					str += strBoxLeft; str += Gray; str += L"└"; str += std::wstring(BOX_W, L'─'); str += L"┘"; str += Reset; str += L"\x1b[K\n";
+
+					/* 오류 메시지 + 조작 안내 */
+					str += strMsg.empty() ? std::wstring(L"\x1b[K\n")
+										  : Center_Pad(L"✖ " + strMsg, iCols) + Red + L"✖ " + strMsg + Reset + L"\x1b[K\n";
+					std::wstring strHelpPlain, strHelpColored;
+					for (size_t i = 0; i < tText.vecHelp.size(); ++i)
+					{
+						const std::wstring strGap = (i + 1 < tText.vecHelp.size()) ? L"    " : L"";
+						strHelpPlain   += tText.vecHelp[i].first + L" " + tText.vecHelp[i].second + strGap;
+						strHelpColored += std::wstring(Yellow) + tText.vecHelp[i].first + Reset + Gray + L" " + tText.vecHelp[i].second + strGap + Reset;
+					}
+					str += Center_Pad(strHelpPlain, iCols) + strHelpColored + L"\x1b[K\x1b[J";
+
+					/* 행 번호 (1부터) : 빈 줄 1 + 로고 6 + 부제 1 + 빈 줄 1 + 위 테두리 1 + 빈 칸 1 = 11줄 다음부터 입력칸
+					   입력칸 n개 → 빈 칸 / 버튼 / 빈 칸 / 아래 테두리 → 메시지 줄 = 12 + n + 4 */
+					g_iStatusRow = 12 + iFieldCount + 4;
+
+					/* (숨긴) 진짜 커서를 입력 중인 칸의 글자 끝으로 이동
+					   → 한글 IME가 조합 중인 글자(ㅁ → 미 → 민)를 커서 위치에 띄우므로, 안 옮기면 맨 끝 안내문 옆에 보임
+					   열: 박스 왼쪽 여백 + "│" + "  ▸ " + 라벨 + "  " + " " + 입력된 글자 */
+					const int iCaretRow = 12 + iFocus;
+					const int iCaretCol = static_cast<int>(strBoxLeft.size()) + 1 + 4 + Width(vecFields[iFocus].szLabel) + 2 + 1 + Width(vecFields[iFocus].strValue) + 1;
+					str += L"\x1b[" + std::to_wstring(iCaretRow) + L";" + std::to_wstring(iCaretCol) + L"H";
+					Write(str);
 				}
+				Sleep(16);
 			}
-
-			/* ---- 그리기 (바뀐 게 있거나 창 크기가 바뀌었을 때만) ---- */
-			if (isDirty || Need_Redraw())
-			{
-				isDirty = false;
-				int iCols{ 0 }, iRows{ 0 };
-				Get_ConsoleSize(iCols, iRows);
-				const std::wstring strLogoLeft = Spaces((iCols - Detail::LOGO_W) / 2);
-				const std::wstring strBoxLeft = Spaces((iCols - BOX_W - 2) / 2);
-				const std::wstring strSubtitle = L"7인 마피아 게임 · CMD Edition";
-
-				std::wstring str = L"\x1b[H\x1b[K\n";
-				for (int i = 0; i < 6; ++i) str += strLogoLeft + Logo_Line(i) + L"\x1b[K\n";
-				str += Center_Pad(strSubtitle, iCols); str += Gray; str += strSubtitle; str += Reset; str += L"\x1b[K\n\x1b[K\n";
-
-				/* 상단 테두리: ┌──── 로 그 인 ────┐ */
-				const std::wstring strTitle = L" 로 그 인 ";
-				const int iLeftLine = (BOX_W - Width(strTitle)) / 2;
-				str += strBoxLeft; str += Gray; str += L"┌"; str += std::wstring(iLeftLine, L'─'); str += Reset;
-				str += Bold; str += strTitle; str += Reset;
-				str += Gray; str += std::wstring(BOX_W - iLeftLine - Width(strTitle), L'─'); str += L"┐"; str += Reset; str += L"\x1b[K\n";
-
-				auto Row = [&](const std::wstring& strColored, int iPlainWidth)
-				{
-					return strBoxLeft + Gray + L"│" + Reset + strColored + Spaces(BOX_W - iPlainWidth) + Gray + L"│" + Reset + L"\x1b[K\n";
-				};
-
-				str += Row(L"", 0);
-				for (int i = 0; i < 3; ++i)
-				{
-					const bool isFocus = (i == iFocus);
-					std::wstring strLine = isFocus ? std::wstring(L"  ") + Yellow + L"▸ " + Reset + Bold + szLabel[i] + Reset
-												   : std::wstring(L"    ") + Gray + szLabel[i] + Reset;
-					strLine += L"  ";
-					const int iTextW = Width(strField[i]);
-					if (isFocus)
-						strLine += std::wstring(Detail::FIELD) + L" " + strField[i] + Detail::CURSOR + L" " + Reset + Detail::FIELD + Spaces(FIELD_W - 2 - iTextW) + Reset;
-					else
-						strLine += L" " + Fit(strField[i], FIELD_W - 1);
-					str += Row(strLine, 4 + Width(szLabel[i]) + 2 + FIELD_W);
-				}
-				str += Row(L"", 0);
-
-				const std::wstring strButton = L"  Enter  접속하기  ";
-				const int iButtonLeft = (BOX_W - Width(strButton)) / 2;
-				str += Row(Spaces(iButtonLeft) + Detail::SELECT + strButton + Reset, iButtonLeft + Width(strButton));
-				str += Row(L"", 0);
-				str += strBoxLeft; str += Gray; str += L"└"; str += std::wstring(BOX_W, L'─'); str += L"┘"; str += Reset; str += L"\x1b[K\n";
-
-				/* 오류 메시지 + 조작 안내 */
-				str += strMsg.empty() ? std::wstring(L"\x1b[K\n")
-									  : Center_Pad(L"✖ " + strMsg, iCols) + Red + L"✖ " + strMsg + Reset + L"\x1b[K\n";
-				const std::wstring strHelp = L"[Tab] 다음 칸    [↑↓] 이동    [Enter] 접속    [Esc] 종료";
-				str += Center_Pad(strHelp, iCols);
-				str += Yellow; str += L"[Tab]"; str += Reset; str += Gray; str += L" 다음 칸    "; str += Reset;
-				str += Yellow; str += L"[↑↓]"; str += Reset; str += Gray; str += L" 이동    "; str += Reset;
-				str += Yellow; str += L"[Enter]"; str += Reset; str += Gray; str += L" 접속    "; str += Reset;
-				str += Yellow; str += L"[Esc]"; str += Reset; str += Gray; str += L" 종료"; str += Reset;
-				str += L"\x1b[K\x1b[J";
-				Write(str);
-			}
-			Sleep(16);
 		}
 	}
 
-	/* 로그인 화면 아래에 "접속 중..." 표시 (Run_Login이 끝난 직후, connect 하기 전에 호출)
-	   connect는 실패하면 Windows가 재시도하느라 약 2초 멈추므로, 그동안 멈춘 게 아니라는 걸 보여줌 */
-	inline void Show_Connecting(const std::string& strIP, uint16_t iPort)
+	/* 카드 아래(오류 메시지 줄)에 상태 한 줄 표시 : "⋯ 서버에 접속하는 중", "⋯ 로그인 확인 중" 등
+	   connect처럼 잠깐 멈추는 동안 멈춘 게 아니라는 걸 보여줌 */
+	inline void Show_Status(const std::wstring& strMsg)
 	{
 		using namespace Color;
 		int iCols{ 0 }, iRows{ 0 };
 		Get_ConsoleSize(iCols, iRows);
-		const std::wstring strMsg = L"⋯ " + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 서버에 접속하는 중";
-		Write(L"\x1b[K\n\x1b[K\n" + Center_Pad(strMsg, iCols) + Yellow + strMsg + Reset + L"\x1b[K");
+		Set_CursorVisible(false);
+		Write(L"\x1b[" + std::to_wstring(Detail::g_iStatusRow) + L";1H\x1b[K" + Center_Pad(strMsg, iCols) + Yellow + strMsg + Reset);
+	}
+
+	/* ---------------- 서버 접속 (IP / 포트) ---------------- */
+	struct ConnectResult
+	{
+		bool			isOk{ false };		// Esc로 나가면 false
+		std::string		strIP;
+		uint16_t		iPort{ 0 };
+	};
+
+	inline ConnectResult Run_ServerConnect(const std::wstring& strDefaultIP = L"127.0.0.1", uint16_t iDefaultPort = 1234, const std::wstring& strError = L"")
+	{
+		std::vector<Detail::FormField> vecFields = {
+			{ L"서버 IP", strDefaultIP,						Detail::FIELD_KIND::IP },
+			{ L"포트   ", std::to_wstring(iDefaultPort),	Detail::FIELD_KIND::PORT } };
+		const Detail::FormText tText{ L" 서 버 접 속 ", L"", L"  Enter  접속하기  ",
+			{ { L"[Tab]", L"다음 칸" }, { L"[↑↓]", L"이동" }, { L"[Enter]", L"접속" }, { L"[Esc]", L"종료" } } };
+
+		auto fnValidate = [](const std::vector<Detail::FormField>& vecF, int& iFocus) -> std::wstring
+		{
+			IN_ADDR tAddr{};
+			if (InetPtonW(AF_INET, vecF[0].strValue.c_str(), &tAddr) != 1)	{ iFocus = 0; return L"서버 IP 형식이 올바르지 않습니다. (예: 192.168.0.5)"; }
+			if (Parse_Port(vecF[1].strValue) == 0)							{ iFocus = 1; return L"포트는 1024 ~ 65535 사이 숫자입니다."; }
+			return L"";
+		};
+
+		if (Detail::Run_Form(tText, vecFields, strError, 0, fnValidate) == false) return {};
+
+		std::string strIP;		// 숫자와 '.'만 입력받았으므로 그대로 좁혀도 안전
+		for (wchar_t c : vecFields[0].strValue) strIP += static_cast<char>(c);
+		return { true, strIP, Parse_Port(vecFields[1].strValue) };
+	}
+
+	/* 접속 화면에서 Enter 직후, connect 하기 전에 호출 (실패하면 Windows가 재시도하느라 약 2초 멈춤) */
+	inline void Show_Connecting(const std::string& strIP, uint16_t iPort)
+	{
+		Show_Status(L"⋯ " + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 서버에 접속하는 중");
+	}
+
+	/* 접속 연출 : 돌아가는 아이콘 + 진행 바를 dwTotalMs까지 채운 뒤 "접속 완료"
+	   connect가 너무 빨리 끝나 화면이 깜빡 넘어가는 걸 막는 용도
+	   dwElapsedMs : connect에 이미 걸린 시간 (바가 그만큼 차 있는 상태에서 시작) */
+	inline void Play_Connecting(const std::string& strIP, uint16_t iPort, DWORD dwTotalMs = 1500, DWORD dwElapsedMs = 0)
+	{
+		using namespace Color;
+		constexpr int		BAR_W = 20;
+		constexpr DWORD		FRAME_MS = 60;
+		const wchar_t		szSpin[] = L"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+		const std::wstring	strText = Widen(strIP) + L":" + std::to_wstring(iPort) + L" 서버에 접속하는 중";
+
+		int iCols{ 0 }, iRows{ 0 };
+		Get_ConsoleSize(iCols, iRows);
+		Set_CursorVisible(false);
+
+		const ULONGLONG ullStart = GetTickCount64() - dwElapsedMs;
+		for (int iFrame = 0; ; ++iFrame)
+		{
+			const DWORD dwNow = static_cast<DWORD>(GetTickCount64() - ullStart);
+			const int iFill = (std::min)(BAR_W, static_cast<int>(BAR_W * dwNow / (std::max)(dwTotalMs, 1ul)));
+
+			/* "⠹ 127.0.0.1:1234 서버에 접속하는 중  ━━━━━━━━━━──────────" */
+			const std::wstring strPlain = L"⠋ " + strText + L"  " + std::wstring(BAR_W, L'━');
+			std::wstring str = L"\x1b[" + std::to_wstring(Detail::g_iStatusRow) + L";1H\x1b[K" + Center_Pad(strPlain, iCols);
+			str += Yellow; str += szSpin[iFrame % 10]; str += L" "; str += strText; str += L"  ";
+			str += Red;  str += std::wstring(iFill, L'━');
+			str += Gray; str += std::wstring(BAR_W - iFill, L'─'); str += Reset;
+			Write(str);
+
+			if (dwNow >= dwTotalMs) break;
+			Sleep(FRAME_MS);
+		}
+
+		/* 완료 표시 잠깐 */
+		const std::wstring strDone = L"✔ " + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 접속 완료";
+		Write(L"\x1b[" + std::to_wstring(Detail::g_iStatusRow) + L";1H\x1b[K" + Center_Pad(strDone, iCols) + Green + strDone + Reset);
+		Sleep(400);
+
+		FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));	// 연출 중에 누른 키는 버림 (다음 화면으로 새지 않게)
+	}
+
+	/* ---------------- 로그인 (닉네임) : 이미 서버에 연결된 상태 ---------------- */
+	struct LoginResult
+	{
+		bool			isOk{ false };		// Esc로 나가면 false
+		std::wstring	strNickname;
+	};
+
+	/* strServerInfo : 로고 아래에 표시 ("서버 127.0.0.1:1234 · #3")
+	   strDefaultNick : 실패 후 다시 띄울 때 이전에 입력한 닉네임 유지용 */
+	inline LoginResult Run_Login(const std::wstring& strServerInfo, const std::wstring& strDefaultNick = L"", const std::wstring& strError = L"", size_t iMaxNickLen = 10)
+	{
+		std::vector<Detail::FormField> vecFields = { { L"닉네임 ", strDefaultNick, Detail::FIELD_KIND::NICK } };
+		const Detail::FormText tText{ L" 로 그 인 ", strServerInfo, L"  Enter  로그인  ",
+			{ { L"[Enter]", L"로그인" }, { L"[Esc]", L"접속 화면으로" } } };
+
+		auto fnValidate = [](const std::vector<Detail::FormField>& vecF, int& iFocus) -> std::wstring
+		{
+			if (vecF[0].strValue.empty()) { iFocus = 0; return L"닉네임을 입력하세요."; }
+			return L"";		// 글자 종류 / 중복 검사는 서버가 함
+		};
+
+		if (Detail::Run_Form(tText, vecFields, strError, iMaxNickLen, fnValidate) == false) return {};
+		return { true, vecFields[0].strValue };
 	}
 
 	/* ---------------- 로비 (방 목록 선택 + 접속 중) ---------------- */

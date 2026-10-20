@@ -12,6 +12,7 @@ namespace MafiaClient
 		virtual ~CIntro();
 	protected:
 		HRESULT	Initialize() override;
+		void	Register_NetEventCallBack() override;
 	public:
 		void Enter() override;
 		void Exit() override;
@@ -21,5 +22,7 @@ namespace MafiaClient
 		void Render() override;
 	public:
 		static std::unique_ptr<CIntro> Create();
+
+		// CScene을(를) 통해 상속됨
 	};
 }

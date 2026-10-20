@@ -41,12 +41,16 @@ namespace MafiaClient
 		void	Render();
 	public:
 		/* ---- Scene에서 사용 ---- */
-		void	Change_Scene(SCENE eScene) { m_eNextScene = eScene; }	/* 바로 바꾸지 않고 요청만 저장 → Late_Update에서 교체 */
+		/* 바로 바꾸지 않고 요청 큐에 쌓기만 함 → Render까지 끝난 프레임 맨 끝에서 교체 */
+		void	Change_Scene(SCENE eScene) { m_queueSceneRequests.push(eScene); }
+		/* 콜백 안에서 연결을 끊고 싶을 때 : 표시만 하고, m_pClient->Pre_Update()가 끝난 뒤 App이 정리 */
+		void	Request_Disconnect() { m_isLostConnection = true; }
 		void	Quit() { m_isRunning = false; }
 		bool	Is_Running() const { return m_isRunning; }
 
-		/* 로그인 성공: 연결과 내 정보 보관 */
-		void	Set_Connection(std::unique_ptr<Net::CClient> pClient, const std::wstring& strNickname, const std::wstring& strServer);
+		/* 접속 성공 : 연결 보관 (CConnect) / 로그인 성공 : 닉네임 보관 (CLogin) */
+		void	Set_Connection(std::unique_ptr<Net::CClient> pClient, const std::wstring& strServer);
+		void	Set_Nickname(const std::wstring& strNickname) { m_strNickname = strNickname; }
 		void	Disconnect();
 
 		Net::CClient*			Get_Client() const { return m_pClient.get(); }
@@ -54,12 +58,12 @@ namespace MafiaClient
 		const std::wstring&		Get_ServerText() const { return m_strServer; }
 		const Init_Data&		Get_InitData() const { return m_tInitData; }
 
-	private:
 		/* ---- NetLib 콜백 (m_pClient->Pre_Update 안에서 불림 = 로직 스레드) ---- */
-		void	Register_NetEvents();
+		void	Clear_NetEvents();
 		void	On_ReceivePacket(const Net::Event& tEvent);
 		void	On_SendPacket(const Net::Event& tEvent);
 		void	On_Disconnect(const Net::Event& tEvent);
+		void	Register_DefaultNetEvents();
 	private:
 		std::unique_ptr<CScene>	Create_Scene(SCENE eScene);
 		void					Apply_SceneChange();
@@ -72,7 +76,7 @@ namespace MafiaClient
 		/* Scene */
 		std::unique_ptr<CScene>		m_pScene;
 		MafiaClient::SCENE			m_eCurScene;
-		MafiaClient::SCENE			m_eNextScene;
+		std::queue<MafiaClient::SCENE>	m_queueSceneRequests;	/* 이번 프레임에 들어온 Scene 변경 요청 */
 
 		/* 서버 연결 (나) */
 		std::unique_ptr<Net::CClient>	m_pClient;

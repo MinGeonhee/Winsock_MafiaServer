@@ -10,20 +10,15 @@ namespace Protocol
 	{
 		wchar_t wszNicName[Protocol::MAX_NICNAME_BUF];
 	};
-
 	/* 로그인 성공하였을 경우 */
 	struct S_TO_C_LOGIN
 	{
 		uint64_t iClientKey{0};
 	};
-
 	/* 로그인 실패하였을 경우 */
 	struct S_TO_C_LOGIN_FAILED
 	{
-		wchar_t wszReason[Protocol::MAX_NICNAME_BUF];
+		Protocol::CHECK_NAME eFailedType{};
 	};
 #pragma pack(pop)
-
-
-
 }

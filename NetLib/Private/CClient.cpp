@@ -209,15 +209,29 @@ namespace Net
 		return pClient;
 	}
 
-	bool CClient::Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE eType, NetEventFuntion callback)
+	void CClient::Clear_CallBackNetEvent()
+	{
+		for (auto& Func : m_arrayServerEvents)	Func = nullptr;
+	}
+
+	void CClient::Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE eType, NetEventFuntion callback)
 	{
 		int iIndex = static_cast<int>(eType);
-		if (iIndex < 0 || iIndex >= static_cast<int>(NET_EVENT_TYPE::END)) return false;
-		if (m_arrayServerEvents[iIndex]) return false;
-
+		if (iIndex < 0 || iIndex >= static_cast<int>(NET_EVENT_TYPE::END)) return;
+		m_arrayServerEvents[iIndex] = nullptr;
 		m_arrayServerEvents[iIndex] = std::move(callback);
+	}
 
-		return true;
+	void CClient::Resigster_CallBackNetEvent(NetEventFuntion ConnectCallBack, NetEventFuntion RejectConnectCallBack, NetEventFuntion ReceivePacketCallBack,
+		NetEventFuntion SendPacketCallBack, NetEventFuntion DisconnectCallBack)
+	{
+		if (ConnectCallBack) m_arrayServerEvents[static_cast<int>(Net::NET_EVENT_TYPE::Connect)] = ConnectCallBack;
+		if (RejectConnectCallBack) m_arrayServerEvents[static_cast<int>(Net::NET_EVENT_TYPE::Reject_Connect)] = RejectConnectCallBack;
+		if (ReceivePacketCallBack) m_arrayServerEvents[static_cast<int>(Net::NET_EVENT_TYPE::Receive_Packet)] = ReceivePacketCallBack;
+		if (SendPacketCallBack) m_arrayServerEvents[static_cast<int>(Net::NET_EVENT_TYPE::Send_Packet)] = SendPacketCallBack;
+		if (DisconnectCallBack) m_arrayServerEvents[static_cast<int>(Net::NET_EVENT_TYPE::Disconnect)] = DisconnectCallBack;
+
+		return;
 	}
 
 

@@ -12,6 +12,7 @@ namespace MafiaClient
 		virtual ~CGame();
 	protected:
 		HRESULT	Initialize() override;
+		void	Register_NetEventCallBack() override;
 	public:
 		void Enter() override;
 		void Exit() override;

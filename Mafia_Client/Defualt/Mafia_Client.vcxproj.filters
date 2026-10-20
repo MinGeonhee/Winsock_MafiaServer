@@ -34,6 +34,9 @@
     <Filter Include="소스 파일\01. Core\00. Scene">
       <UniqueIdentifier>{400a1fc9-c84d-443f-8d4d-e115aa54c542}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\01. Core\00. Scene\00. Connect">
+      <UniqueIdentifier>{46356f91-b864-4c88-934e-624bf4dda7c4}</UniqueIdentifier>
+    </Filter>
     <Filter Include="소스 파일\01. Core\00. Scene\01. Login">
       <UniqueIdentifier>{9f64dbc6-69ed-40cc-8884-cb51783a0c72}</UniqueIdentifier>
     </Filter>
@@ -72,6 +75,9 @@
     <ClCompile Include="..\Private\CRoom.cpp">
       <Filter>소스 파일\01. Core\00. Scene\03. Room</Filter>
     </ClCompile>
+    <ClCompile Include="..\Private\CConnect.cpp">
+      <Filter>소스 파일\01. Core\00. Scene\00. Connect</Filter>
+    </ClCompile>
     <ClCompile Include="..\Private\CLogin.cpp">
       <Filter>소스 파일\01. Core\00. Scene\01. Login</Filter>
     </ClCompile>
@@ -103,6 +109,9 @@
     </ClInclude>
     <ClInclude Include="..\Public\CLobby.h">
       <Filter>소스 파일\01. Core\00. Scene\02. Lobby</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CConnect.h">
+      <Filter>소스 파일\01. Core\00. Scene\00. Connect</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CLogin.h">
       <Filter>소스 파일\01. Core\00. Scene\01. Login</Filter>

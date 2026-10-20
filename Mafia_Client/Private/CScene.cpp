@@ -9,4 +9,15 @@ namespace MafiaClient
 	{
 
 	}
+
+	HRESULT CScene::Initialize()
+	{
+		return S_OK;
+	}
+
+	void CScene::Enter()
+	{
+		this->m_pClientApp->Clear_NetEvents();
+		this->Register_NetEventCallBack();
+	}
 }

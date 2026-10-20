@@ -1,16 +1,25 @@
-#pragma once
+ï»¿#pragma once
 
 namespace Protocol
 {
-	/* ´Ð³×ÀÓ Á¦ÇÑ Å©±â 10±ÛÀÚ */
+	/* ë‹‰ë„¤ìž„ ì œí•œ í¬ê¸° 10ê¸€ìž */
 	constexpr size_t MAX_NICKNAME_LEN  = 10;
 	constexpr size_t MAX_NICNAME_BUF   = 16;
 
-
-	enum class PACKET_TYPE
+	enum class CHECK_NAME : uint16_t
 	{
-		C_TO_S_LOGIN = 0, // ·Î±×ÀÎ => ´Ð³×ÀÓ ÀÌÀÌµð ºñ¹Ð¹øÈ£
-		S_TO_C_LOGIN = 1, // ·Î±×ÀÎ => ´Ð³×ÀÓ ÀÌÀÌµð ºñ¹Ð¹øÈ£
+		OK,
+		EMPTY,
+		OVER,
+		INVALID_CHARACTER,
+		END
+	};
+
+	enum class PACKET_TYPE : uint16_t
+	{
+		C_TO_S_LOGIN = 0, // ë¡œê·¸ì¸ => ë‹‰ë„¤ìž„ ì´ì´ë”” ë¹„ë°€ë²ˆí˜¸
+		S_TO_C_LOGIN = 1, // ë¡œê·¸ì¸ => ë‹‰ë„¤ìž„ ì´ì´ë”” ë¹„ë°€ë²ˆí˜¸
+		S_TO_C_LOGIN_FAILED = 2, // ë¡œê·¸ì¸ ì‹¤íŒ¨ => ì‚¬ìœ 
 		END
 	};
 }

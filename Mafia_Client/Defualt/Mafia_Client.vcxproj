@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -137,6 +137,7 @@
     <ClCompile Include="..\Private\CGame.cpp" />
     <ClCompile Include="..\Private\CIntro.cpp" />
     <ClCompile Include="..\Private\CLobby.cpp" />
+    <ClCompile Include="..\Private\CConnect.cpp" />
     <ClCompile Include="..\Private\CLogin.cpp" />
     <ClCompile Include="..\Private\CRoom.cpp" />
     <ClCompile Include="..\Private\CScene.cpp" />
@@ -149,6 +150,7 @@
     <ClInclude Include="..\Public\CGame.h" />
     <ClInclude Include="..\Public\CIntro.h" />
     <ClInclude Include="..\Public\CLobby.h" />
+    <ClInclude Include="..\Public\CConnect.h" />
     <ClInclude Include="..\Public\CLogin.h" />
     <ClInclude Include="..\Public\CRoom.h" />
     <ClInclude Include="..\Public\CScene.h" />

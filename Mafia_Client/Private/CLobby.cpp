@@ -16,6 +16,8 @@ namespace MafiaClient
 
 	HRESULT CLobby::Initialize()
 	{
+		if (FAILED(__super::Initialize())) return E_FAIL;
+
 		m_tView.strNickname = m_pClientApp->Get_Nickname();
 		m_tView.strServer	= m_pClientApp->Get_ServerText();
 		m_tView.vecMembers	= { m_pClientApp->Get_Nickname() };		/* 서버에서 목록 받기 전까지는 나만 */
@@ -30,6 +32,8 @@ namespace MafiaClient
 
 	void CLobby::Enter()
 	{
+		__super::Enter();
+
 		ConsoleUI::Set_CursorVisible(false);
 		ConsoleUI::Clear();
 		m_isDirty = true;
@@ -61,7 +65,7 @@ namespace MafiaClient
 				break;
 			case VK_ESCAPE:
 				m_pClientApp->Disconnect();
-				m_pClientApp->Change_Scene(MafiaClient::SCENE::LOGIN);
+				m_pClientApp->Change_Scene(MafiaClient::SCENE::CONNECT);
 				break;
 			default: break;
 			}
@@ -98,5 +102,11 @@ namespace MafiaClient
 		if (FAILED(pScene->Initialize()))
 			return nullptr;
 		return pScene;
+	}
+
+	void CLobby::Register_NetEventCallBack()
+	{
+		/* 기존 Default CallBack함수등록 */
+		m_pClientApp->Register_DefaultNetEvents();
 	}
 }

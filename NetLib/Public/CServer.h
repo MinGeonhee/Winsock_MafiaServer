@@ -43,7 +43,10 @@ namespace Net
 		bool	Push_SendEvent(ClientKey iKey, std::vector<char>&& vecPacket);
 
 	public:
-		bool	Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE eType, NetEventFuntion callback);
+		void	Clear_CallBackNetEvent();
+		void	Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE eType, NetEventFuntion callback);
+		void	Resigster_CallBackNetEvent(NetEventFuntion ConnectCallBack, NetEventFuntion RejectConnectCallBack,
+										   NetEventFuntion ReceivePacketCallBack,NetEventFuntion SendPacketCallBack, NetEventFuntion DisconnectCallBack);
 
 		/* 게임 쪽 : iKey 클라에게 보내기 요청 (Late_Update에서 실제 전송) */
 		bool	Send_Packet(ClientKey iKey, uint16_t usType, const void* pBody, uint16_t usLen);

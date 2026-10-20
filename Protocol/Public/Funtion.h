@@ -14,15 +14,16 @@ namespace Protocol
 			|| wsz == L'_';
 	}
 
-	inline bool Is_VailedNickName( const std::wstring& wstrNicName )
+	inline  CHECK_NAME Is_VailedNickName( const std::wstring& wstrNicName )
 	{
-		if (wstrNicName.empty()) return false;
-		if (wstrNicName.size() > Protocol::MAX_NICKNAME_LEN) return false;
+		if (wstrNicName.empty()) return CHECK_NAME::EMPTY;
+		if (wstrNicName.size() > Protocol::MAX_NICKNAME_LEN) return CHECK_NAME::OVER;
 
 		for (wchar_t wsz : wstrNicName)
-			if (Is_ValidNickChar(wsz))
-				return false;
-		return true;
+			if (Is_ValidNickChar(wsz) == false)
+				return CHECK_NAME::INVALID_CHARACTER;
+
+		return CHECK_NAME::OK;
 	}
 
 }

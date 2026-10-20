@@ -17,11 +17,15 @@ namespace MafiaClient
 
 	HRESULT CGame::Initialize()
 	{
+		if (FAILED(__super::Initialize())) return E_FAIL;
+
 		return S_OK;
 	}
 
 	void CGame::Enter()
 	{
+		__super::Enter();
+
 		ConsoleUI::Clear();
 		m_isDirty = true;
 	}
@@ -62,5 +66,11 @@ namespace MafiaClient
 		if (FAILED(pScene->Initialize()))
 			return nullptr;
 		return pScene;
+	}
+
+	void CGame::Register_NetEventCallBack()
+	{
+		/* 기존 Default CallBack함수등록 */
+		m_pClientApp->Register_DefaultNetEvents();
 	}
 }
