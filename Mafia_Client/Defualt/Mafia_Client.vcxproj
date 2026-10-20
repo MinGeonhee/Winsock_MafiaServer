@@ -108,7 +108,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/;../../ConsoleUI/;../../Protocol/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/;../../ConsoleUI/;../../Protocol/Public/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -124,7 +124,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/;../../ConsoleUI/;../../Protocol/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Public/;../../NetLib/Public/;../../ConsoleUI/;../../Protocol/Public/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -160,6 +160,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\NetLib\Default\NetLib.vcxproj">
       <Project>{1fd4aa7b-43a7-42fe-ac75-6cc15b508a3b}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Protocol\Default\Protocol.vcxproj">
+      <Project>{a11f116c-b22d-4a92-a742-7188135cbce5}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

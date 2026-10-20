@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Public"><UniqueIdentifier>{7fef52e4-0126-48fe-b5b2-fdf606ed72bc}</UniqueIdentifier></Filter>
+    <Filter Include="Private"><UniqueIdentifier>{12ec71d7-7bfd-4a70-bf11-84c06c7d74ea}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Public\CPlayer.h"><Filter>Public</Filter></ClInclude>
+    <ClInclude Include="..\Public\Enum.h"><Filter>Public</Filter></ClInclude>
+    <ClInclude Include="..\Public\Funtion.h"><Filter>Public</Filter></ClInclude>
+    <ClInclude Include="..\Public\pch.h"><Filter>Public</Filter></ClInclude>
+    <ClInclude Include="..\Public\Protocol_Header.h"><Filter>Public</Filter></ClInclude>
+    <ClInclude Include="..\Public\Struct.h"><Filter>Public</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Private\CPlayer.cpp"><Filter>Private</Filter></ClCompile>
+    <ClCompile Include="..\Private\Enum.cpp"><Filter>Private</Filter></ClCompile>
+    <ClCompile Include="..\Private\Struct.cpp"><Filter>Private</Filter></ClCompile>
+    <ClCompile Include="..\Private\pch.cpp"><Filter>Private</Filter></ClCompile>
+  </ItemGroup>
+</Project>

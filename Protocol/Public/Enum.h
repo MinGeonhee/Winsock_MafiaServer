@@ -1,4 +1,6 @@
 ﻿#pragma once
+#include <cstdint>
+#include <cstddef>
 
 namespace Protocol
 {
@@ -12,6 +14,15 @@ namespace Protocol
 		EMPTY,
 		OVER,
 		INVALID_CHARACTER,
+		END
+	};
+
+	/* 플레이어가 지금 어디 있는지 */
+	enum class PLAYER_STATE : uint8_t
+	{
+		LOBBY = 0,
+		ROOM,
+		GAME,
 		END
 	};
 

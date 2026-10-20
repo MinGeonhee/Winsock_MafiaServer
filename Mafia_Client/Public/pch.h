@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifndef PCH_H
 #define PCH_H
@@ -27,13 +27,11 @@
 
 /* Net Lib */
 #include "Net_Header.h"
+
+/* Protocol (정적 라이브러리) */
+#include "Protocol_Header.h"
 #include "Enum.h"
 
-
-/* Protocol */
-#include "../../Protocol/Public/Enum.h" 
-#include "../../Protocol/Public/Funtion.h" 
-#include "../../Protocol/Public/Struct.h" 
 
 
 #endif //PCH_H

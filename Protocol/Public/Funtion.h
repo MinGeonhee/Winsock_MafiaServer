@@ -1,13 +1,13 @@
-#pragma once
+ï»¿#pragma once
 #include <string>
 #include "Enum.h"
 
 namespace Protocol
 {
-	/* ±ÛÀÚ ±æÀÌ Á¦ÇÑ ÁÖ±â */
+	/* ê¸€ìž ê¸¸ì´ ì œí•œ ì£¼ê¸° */
 	inline bool Is_ValidNickChar( wchar_t wsz )
 	{
-		return (wsz >= L'°¡' && wsz  <= L'ÆR')
+		return (wsz >= L'ê°€' && wsz  <= L'íž£')
 			|| (wsz >= L'a' && wsz <= L'z')
 			|| (wsz >= L'A' && wsz <= L'Z')
 			|| (wsz >= L'0' && wsz <= L'9')

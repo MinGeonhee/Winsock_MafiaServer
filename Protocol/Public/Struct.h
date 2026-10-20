@@ -1,24 +1,30 @@
-#pragma once
+ï»¿#pragma once
 #include "Enum.h"
-#include "string.h"
-#include <stdint.h>
+#include <cstdint>
 namespace Protocol
 {
 #pragma pack(push,1)
-	/* Å¬¶óÀÌ¾ğÆ®°¡ ¼­¹öÇÑÅ× */
+	/* í´ë¼ì´ì–¸íŠ¸ê°€ ì„œë²„í•œí…Œ */
 	struct C_TO_S_LOGIN
 	{
 		wchar_t wszNicName[Protocol::MAX_NICNAME_BUF];
 	};
-	/* ·Î±×ÀÎ ¼º°øÇÏ¿´À» °æ¿ì */
+	/* ë¡œê·¸ì¸ ì„±ê³µí•˜ì˜€ì„ ê²½ìš° */
 	struct S_TO_C_LOGIN
 	{
 		uint64_t iClientKey{0};
 	};
-	/* ·Î±×ÀÎ ½ÇÆĞÇÏ¿´À» °æ¿ì */
+	/* ë¡œê·¸ì¸ ì‹¤íŒ¨í•˜ì˜€ì„ ê²½ìš° */
 	struct S_TO_C_LOGIN_FAILED
 	{
 		Protocol::CHECK_NAME eFailedType{};
+	};
+	/* í”Œë ˆì´ì–´ í•œ ëª… (ë„¤íŠ¸ì›Œí¬ë¡œ ë³´ë‚´ëŠ” ê³µê°œ ì •ë³´ë§Œ, ê³ ì • í¬ê¸°) */
+	struct PlayerInfo
+	{
+		uint64_t	iKey{ 0 };
+		wchar_t		wszNickname[Protocol::MAX_NICNAME_BUF]{};
+		uint8_t		eState{ 0 };		/* PLAYER_STATE */
 	};
 #pragma pack(pop)
 }

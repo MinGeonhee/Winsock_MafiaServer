@@ -37,6 +37,9 @@
     <Filter Include="소스 파일\02. Logic\00. CServerApp">
       <UniqueIdentifier>{d4584e56-d7bd-4f69-a0d7-acfb7814907c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\01. Core\02. Player">
+      <UniqueIdentifier>{a32e3ed9-2b14-4935-9f51-2463630fab2d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Private\pch.cpp">
