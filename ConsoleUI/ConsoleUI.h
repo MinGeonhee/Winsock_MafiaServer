@@ -566,6 +566,27 @@ namespace ConsoleUI
 		Show_Status(L"⋯ " + Widen(strIP) + L":" + std::to_wstring(iPort) + L" 서버에 접속하는 중");
 	}
 
+	/* 상태 줄 한 장 그리기 (블로킹 없음) : "⠹ 문구  ━━━━━━──────"
+	   응답 패킷을 기다리는 동안처럼 프레임이 계속 돌아야 할 때 매 프레임 호출
+	   iFrame : 회전 아이콘 순서 (아무 증가 값), fProgress : 0 ~ 1 진행 바 */
+	inline void Draw_Progress(const std::wstring& strText, int iFrame, float fProgress)
+	{
+		using namespace Color;
+		constexpr int	BAR_W = 20;
+		const wchar_t	szSpin[] = L"⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+
+		int iCols{ 0 }, iRows{ 0 };
+		Get_ConsoleSize(iCols, iRows);
+		const int iFill = (std::min)(BAR_W, (std::max)(0, static_cast<int>(BAR_W * fProgress)));
+
+		const std::wstring strPlain = L"⠋ " + strText + L"  " + std::wstring(BAR_W, L'━');
+		std::wstring str = L"\x1b[" + std::to_wstring(Detail::g_iStatusRow) + L";1H\x1b[K" + Center_Pad(strPlain, iCols);
+		str += Yellow; str += szSpin[((iFrame % 10) + 10) % 10]; str += L" "; str += strText; str += L"  ";
+		str += Red;  str += std::wstring(iFill, L'━');
+		str += Gray; str += std::wstring(BAR_W - iFill, L'─'); str += Reset;
+		Write(str);
+	}
+
 	/* 접속 연출 : 돌아가는 아이콘 + 진행 바를 dwTotalMs까지 채운 뒤 "접속 완료"
 	   connect가 너무 빨리 끝나 화면이 깜빡 넘어가는 걸 막는 용도
 	   dwElapsedMs : connect에 이미 걸린 시간 (바가 그만큼 차 있는 상태에서 시작) */

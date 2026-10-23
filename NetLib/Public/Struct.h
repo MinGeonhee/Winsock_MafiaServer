@@ -120,6 +120,8 @@ namespace Net
 		std::string		  strIP{};
 		uint16_t		  iPortNum{};
 		SYSTEMTIME		  tTime{};
+
+		std::wstring	  strText{};	/* Custom 로그일 때만 사용 */
 	};
 
 	using		NetEventFuntion = std::function<void(const Net::Event& tEvent)>;

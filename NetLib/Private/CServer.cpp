@@ -137,6 +137,28 @@ namespace Net
 			m_dequeLogs.pop_front();
 	}
 
+	void CServer::Add_CustomLog(ClientKey iKey, const std::wstring& strText)
+	{
+		std::string strIP{};
+		uint16_t	iPortNum{ 0 };
+
+		/* 접속 중이면 지금 주소, 이미 끊긴 뒤(로그아웃 등)면 그 키의 마지막 로그에 남은 주소 */
+		auto iter = m_umapClients.find(iKey);
+		if (iter != m_umapClients.end())
+		{
+			strIP = iter->second->Get_IP();
+			iPortNum = iter->second->Get_PortNum();
+		}
+		else
+		{
+			for (auto riter = m_dequeLogs.rbegin(); riter != m_dequeLogs.rend(); ++riter)
+				if (riter->iKey == iKey) { strIP = riter->strIP; iPortNum = riter->iPortNum; break; }
+		}
+
+		Add_Logs(NET_LOG_TYPE::Custom, iKey, strIP, iPortNum);
+		m_dequeLogs.back().strText = strText;
+	}
+
 	void CServer::Clear_CallBackNetEvent()
 	{
 		for (auto& Func : m_arrayServerEvents)	Func = nullptr;
@@ -304,6 +326,13 @@ namespace Net
 
 	void CServer::Handle_Disconnect(Net::Event&& tEvent)
 	{
+		if (m_umapClients.find(tEvent.iKey) == m_umapClients.end()) return;
+
+		/* 게임에 먼저 알림 : 아직 연결 정보가 남아 있어 로그아웃 처리 · 로그(IP / 포트)를 그대로 쓸 수 있음
+		   (이 안에서 이 키로 Send_Packet을 해도 보내기 전에 연결이 지워지므로 그냥 버려짐) */
+		Call_Event(tEvent);
+
+		/* 콜백 안에서 map이 바뀌었을 수 있으므로 다시 찾음 */
 		auto iter = m_umapClients.find(tEvent.iKey);
 		if (iter == m_umapClients.end()) return;
 
@@ -311,8 +340,6 @@ namespace Net
 
 		/* CClient 소멸자에서 수신 스레드 join (스레드는 이미 끝나는 중이라 바로 돌아옴) */
 		Unconnect_Client(tEvent.iKey);
-
-		Call_Event(tEvent);
 	}
 
 	std::unique_ptr<CServer> CServer::Create(const CServer::Init_Data& tData)

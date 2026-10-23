@@ -25,9 +25,12 @@ namespace ConsoleUI
 		case Net::NET_LOG_TYPE::Connect:	szText = L"접속"; break;
 		case Net::NET_LOG_TYPE::Disconnect:	szText = L"접속 종료"; break;
 		case Net::NET_LOG_TYPE::Reject:		szText = L"접속 거절 (요청 OFF)"; break;
+		case Net::NET_LOG_TYPE::Custom:		szText = tLog.strText.c_str(); break;	/* 게임이 넣은 문구 (로그인 / 로그아웃 등) */
 		default: break;
 		}
-		return std::wstring(szTime) + L"\t" + strNo + L"\t" + Widen(tLog.strIP) + L"\t" + std::to_wstring(tLog.iPortNum) + L"\t" + szText;
+		const std::wstring strIP	= tLog.strIP.empty() ? L"-" : Widen(tLog.strIP);
+		const std::wstring strPort	= tLog.iPortNum == 0 ? L"-" : std::to_wstring(tLog.iPortNum);
+		return std::wstring(szTime) + L"\t" + strNo + L"\t" + strIP + L"\t" + strPort + L"\t" + szText;
 	}
 
 	/* 창 크기가 바뀌었거나 서버에 새 로그가 생겼으면 true

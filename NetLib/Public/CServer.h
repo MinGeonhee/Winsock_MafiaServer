@@ -63,6 +63,9 @@ namespace Net
 		bool	Is_Accept() const { return m_isAllowAccept; }
 	public:
 		const std::deque<Net::NetLog>&		Get_Logs() const { return m_dequeLogs; }
+
+		/* 게임 쪽 로그 (로그인 / 로그아웃 등) : 같은 로그 창에 iKey의 IP / 포트와 함께 표시 */
+		void								Add_CustomLog(ClientKey iKey, const std::wstring& strText);
 		const CClient*						Get_Client(ClientKey iKey) const;
 		const std::vector<ClientKey>&		Get_ClientKeys() const { return m_vecClientOrder; }
 		uint16_t							Get_PortNum() const;

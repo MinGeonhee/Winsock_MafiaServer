@@ -148,6 +148,9 @@ namespace MafiaServer
 
 				if (m_pPlayerManager->LogIn_Player(tEvent.iKey, tPacket.tData.wszNicName) == false) break;
 
+				/* 서버 로그 : 접속(Accept)과 따로 실제 로그인 시점 */
+				m_pMainServer->Add_CustomLog(tEvent.iKey, std::wstring(L"로그인 (") + tPacket.tData.wszNicName + L")");
+				m_isDirty = true;
 				break;
 			}
 			case Protocol::CHECK_NAME::EMPTY:
@@ -181,7 +184,14 @@ namespace MafiaServer
 	void CServerApp::On_Disconnect(const Net::Event& tEvent)
 	{
 		/* TODO: tEvent.iKey의 CPlayer 정리 (방에서 빼기 등) */
+		/* 로그인했던 사람만 로그아웃 (지우기 전에 닉네임 꺼내 두기) */
+		const Protocol::CPlayer* pPlayer = m_pPlayerManager->Find_Player(tEvent.iKey);
+		if (pPlayer == nullptr) return;
+		const std::wstring strNickname = pPlayer->Get_Nickname();
+
 		if (m_pPlayerManager->LogOut_Player(tEvent.iKey) == false) return;
+
+		m_pMainServer->Add_CustomLog(tEvent.iKey, L"로그아웃 (" + strNickname + L")");
 		m_isDirty = true;
 	}
 

@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "CPlayerManager.h"
 
 namespace  MafiaServer
@@ -36,6 +36,12 @@ namespace  MafiaServer
 		m_umapPlayers.erase(iter);
 
 		return true;
+	}
+
+	const Protocol::CPlayer* CPlayerManager::Find_Player(uint64_t iKey) const
+	{
+		auto iter = m_umapPlayers.find(iKey);
+		return iter != m_umapPlayers.end() ? iter->second.get() : nullptr;
 	}
 
 	std::vector<Protocol::PlayerInfo> CPlayerManager::Get_PlayerInfos()

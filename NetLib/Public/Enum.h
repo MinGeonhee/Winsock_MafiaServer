@@ -12,6 +12,7 @@ namespace Net
 		Connect,     
 		Disconnect,		
 		Reject,			// 127.0.0.1:50300  접속 거절 (요청 OFF)   ← 선택
+		Custom,			// 게임이 남기는 로그 (로그인 / 로그아웃 등). 내용은 NetLog::strText
 		END,
 	};
 
