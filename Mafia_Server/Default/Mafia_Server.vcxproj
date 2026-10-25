@@ -131,7 +131,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\Private\CPlayer.cpp" />
     <ClCompile Include="..\Private\CPlayerManager.cpp" />
+    <ClCompile Include="..\Private\CRoom.cpp" />
+    <ClCompile Include="..\Private\CRoomManager.cpp" />
     <ClCompile Include="..\Private\CServerApp.cpp" />
     <ClCompile Include="..\Private\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -142,7 +145,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\ConsoleUI\ConsoleUI.h" />
+    <ClInclude Include="..\Public\CPlayer.h" />
     <ClInclude Include="..\Public\CPlayerManager.h" />
+    <ClInclude Include="..\Public\CRoom.h" />
+    <ClInclude Include="..\Public\CRoomManager.h" />
     <ClInclude Include="..\Public\CServerApp.h" />
     <ClInclude Include="..\Public\pch.h" />
     <ClInclude Include="..\Public\Struct.h" />

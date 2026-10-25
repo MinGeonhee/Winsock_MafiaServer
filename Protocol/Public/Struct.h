@@ -20,20 +20,58 @@ namespace Protocol
 		Protocol::CHECK_NAME eFailedType{};
 	};
 
-	/* 전적 (나중에 직업별 승수, 연승 등 추가) */
-	struct PlayerRecord
+	/* 룸 제작 의뢰 */
+	struct C_TO_S_CREATE_ROOM
 	{
-		uint32_t	iPlayCount{ 0 };
-		uint32_t	iWinCount{ 0 };
+		wchar_t wszRoomName[Protocol::MAX_ROOMNAME_BUF]{}; /* 룸 이름 */
 	};
-	/* 플레이어 한 명 (네트워크로 보내는 공개 정보만, 고정 크기) */
-	struct PlayerInfo
+
+	/* 방 자리 한 칸 (iKey 0 = 빈자리) */
+	struct ROOM_SEAT
+	{
+		uint64_t	iKey{ 0 };
+		wchar_t		wszNickname[Protocol::MAX_NICNAME_BUF]{};
+	};
+
+	/* 방 입장 성공 : 방 정보 + 자리 7칸 (배열 순서 = 자리 번호) */
+	struct S_TO_C_ENTER_ROOM
+	{
+		ROOM_KEY	iRoomKey{};
+		uint64_t	iMasterKey{ 0 };
+		wchar_t		wszRoomName[Protocol::MAX_ROOMNAME_BUF]{};
+		ROOM_SEAT	arrSeats[Protocol::MAX_ROOM_PLAYER]{};
+	};
+
+	/* 방 들어가기 요청 */
+	struct C_TO_S_ENTER_ROOM
+	{
+		ROOM_KEY	iRoomKey{};
+	};
+
+	/* 방 자리 바뀜 : 방장 + 자리 7칸 (빈자리는 iKey 0) */
+	struct S_TO_C_ROOM_MEMBERS
+	{
+		uint64_t	iMasterKey{ 0 };
+		ROOM_SEAT	arrSeats[Protocol::MAX_ROOM_PLAYER]{};
+	};
+
+	/* 로비 접속자 */
+	struct LOBBY_PLAYER
 	{
 		uint64_t		iKey{ 0 };
 		wchar_t			wszNickname[Protocol::MAX_NICNAME_BUF]{};
-		uint8_t			eState{ 0 };								
+		uint8_t			eState{ 0 };
 	};
 
+	
+	/* 로비 룸 */
+	struct LOBBY_ROOM
+	{
+		ROOM_KEY iRoomKey{};								// 룸 키 번호
+		uint16_t iPlayerNumber{};							// 해당 룸안에 플레이어 숫자
+		bool	 isPlaying{false};							// 게임 중인지 아닌지
+		wchar_t	 wszRoomName[Protocol::MAX_ROOMNAME_BUF]{};	// 룸 이름
+	};
 
 	struct REQ_DATA
 	{
@@ -45,11 +83,18 @@ namespace Protocol
 		DATA_TYPE eDataType{};
 	};
 
-	struct PLAYER_INFOS : PROVIDE_DATA
+	struct LOBBY_PLAYERS : PROVIDE_DATA
 	{
-		uint16_t	iCount{ 0 };
-		PlayerInfo  arr[MAX_ONLINE_PLAYER]{};
+		uint16_t		iCount{ 0 };
+		LOBBY_PLAYER	arr[MAX_ONLINE_PLAYER]{};
 	};
+
+	struct LOBBY_ROOMS : PROVIDE_DATA
+	{
+		uint16_t		iCount{ 0 };
+		LOBBY_ROOM		arr[MAX_ROOM_PACKET_COUNT]{};
+	};
+
 
 #pragma pack(pop)
 

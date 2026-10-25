@@ -4,12 +4,12 @@
 
 namespace MafiaClient
 {
-	class CRoom : public CScene
+	class CScene_Intro : public CScene
 	{
 	protected:
-		CRoom();
+		CScene_Intro();
 	public:
-		virtual ~CRoom();
+		virtual ~CScene_Intro();
 	protected:
 		HRESULT	Initialize() override;
 		void	Register_NetEventCallBack() override;
@@ -21,8 +21,8 @@ namespace MafiaClient
 		void Late_Update() override;
 		void Render() override;
 	public:
-		static std::unique_ptr<CRoom> Create();
-	private:
-		bool	m_isDirty;
+		static std::unique_ptr<CScene_Intro> Create();
+
+		// CScene을(를) 통해 상속됨
 	};
 }

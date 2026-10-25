@@ -1,27 +1,27 @@
 ﻿#include "pch.h"
-#include "CConnect.h"
+#include "CScene_Connect.h"
 #include "CClientApp.h"
 
 
 namespace MafiaClient
 {
-	CConnect::CConnect()
+	CScene_Connect::CScene_Connect()
 		: CScene(), m_strError{}, m_strLastIP{}
 	{
 		m_eType = MafiaClient::SCENE::CONNECT;
 	}
-	CConnect::~CConnect()
+	CScene_Connect::~CScene_Connect()
 	{
 	}
 
-	HRESULT CConnect::Initialize()
+	HRESULT CScene_Connect::Initialize()
 	{
 		if (FAILED(__super::Initialize())) return E_FAIL;
 
 		return S_OK;
 	}
 
-	void CConnect::Enter()
+	void CScene_Connect::Enter()
 	{
 		__super::Enter();
 
@@ -31,15 +31,15 @@ namespace MafiaClient
 		m_iLastPort = tDefault.iEnterServerPortNum;
 	}
 
-	void CConnect::Exit()
+	void CScene_Connect::Exit()
 	{
 	}
 
-	void CConnect::Pre_Update()
+	void CScene_Connect::Pre_Update()
 	{
 	}
 
-	void CConnect::Update()
+	void CScene_Connect::Update()
 	{
 		/* 입력 화면 (Enter / Esc 까지 블로킹. 연결 전이라 막아도 문제 없음) */
 		ConsoleUI::ConnectResult tResult = ConsoleUI::Run_ServerConnect(m_strLastIP, m_iLastPort, m_strError);
@@ -67,15 +67,15 @@ namespace MafiaClient
 		m_pClientApp->Change_Scene(MafiaClient::SCENE::LOGIN);
 	}
 
-	void CConnect::Late_Update()
+	void CScene_Connect::Late_Update()
 	{
 	}
 
-	void CConnect::Render()
+	void CScene_Connect::Render()
 	{
 	}
 
-	bool CConnect::Try_Connect(const ConsoleUI::ConnectResult& tResult)
+	bool CScene_Connect::Try_Connect(const ConsoleUI::ConnectResult& tResult)
 	{
 		Net::CClient::Init_Data tData{ m_pClientApp->Get_InitData().tClientData };
 		tData.szEnterServerIP		= tResult.strIP.c_str();		/* tResult가 살아있는 동안만 유효 → Create 안에서만 사용 */
@@ -88,15 +88,15 @@ namespace MafiaClient
 		return true;
 	}
 
-	void CConnect::Register_NetEventCallBack()
+	void CScene_Connect::Register_NetEventCallBack()
 	{
 		/* 기존 Default CallBack함수등록 (접속 화면은 아직 연결 전이라 실제로는 아무것도 안 됨) */
 		m_pClientApp->Register_DefaultNetEvents();
 	}
 
-	std::unique_ptr<CConnect> CConnect::Create()
+	std::unique_ptr<CScene_Connect> CScene_Connect::Create()
 	{
-		std::unique_ptr<CConnect> pScene{ new CConnect() };
+		std::unique_ptr<CScene_Connect> pScene{ new CScene_Connect() };
 		if (FAILED(pScene->Initialize()))
 			return nullptr;
 		return pScene;

@@ -6,7 +6,7 @@
 namespace MafiaClient
 {
 	/* 로그인 : 이미 서버에 연결된 상태에서 닉네임 입력 → C_TO_S_LOGIN → 응답 대기 → 성공하면 LOBBY */
-	class CLogin : public CScene
+	class CScene_Login : public CScene
 	{
 		/* 로그인 진행 단계 */
 		enum class STEP
@@ -15,9 +15,9 @@ namespace MafiaClient
 			WAIT_LOGIN,		/* 서버 응답(성공 / 실패) 기다리는 중 */
 		};
 	protected:
-		CLogin();
+		CScene_Login();
 	public:
-		virtual ~CLogin();
+		virtual ~CScene_Login();
 	protected:
 		HRESULT	Initialize() override;
 		void	Register_NetEventCallBack() override;
@@ -37,7 +37,7 @@ namespace MafiaClient
 		void	On_LoginSuccess(const Net::Event& tEvent);
 		void	On_LoginFailed(const Net::Event& tEvent);
 	public:
-		static std::unique_ptr<CLogin> Create();
+		static std::unique_ptr<CScene_Login> Create();
 	private:
 		STEP			m_eStep;
 		std::wstring	m_strError;		/* 다음 입력 화면에 빨간 줄로 띄울 사유 */

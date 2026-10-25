@@ -1,28 +1,28 @@
 ﻿#include "pch.h"
-#include "CIntro.h"
+#include "CScene_Intro.h"
 #include "CClientApp.h"
 #include "ConsoleUI.h"
 
 
 namespace MafiaClient
 {
-	CIntro::CIntro()
+	CScene_Intro::CScene_Intro()
 		: CScene()
 	{
 		m_eType = MafiaClient::SCENE::INTRO;
 	}
-	CIntro::~CIntro()
+	CScene_Intro::~CScene_Intro()
 	{
 	}
 
-	HRESULT CIntro::Initialize()
+	HRESULT CScene_Intro::Initialize()
 	{
 		if (FAILED(__super::Initialize())) return E_FAIL;
 
 		return S_OK;
 	}
 
-	void CIntro::Enter()
+	void CScene_Intro::Enter()
 	{
 		__super::Enter();
 
@@ -31,34 +31,34 @@ namespace MafiaClient
 		m_pClientApp->Change_Scene(MafiaClient::SCENE::CONNECT);
 	}
 
-	void CIntro::Exit()
+	void CScene_Intro::Exit()
 	{
 	}
 
-	void CIntro::Pre_Update()
+	void CScene_Intro::Pre_Update()
 	{
 	}
 
-	void CIntro::Update()
+	void CScene_Intro::Update()
 	{
 	}
 
-	void CIntro::Late_Update()
+	void CScene_Intro::Late_Update()
 	{
 	}
 
-	void CIntro::Render()
+	void CScene_Intro::Render()
 	{
 	}
 
-	std::unique_ptr<CIntro> CIntro::Create()
+	std::unique_ptr<CScene_Intro> CScene_Intro::Create()
 	{
-		std::unique_ptr<CIntro> pScene{ new CIntro() };
+		std::unique_ptr<CScene_Intro> pScene{ new CScene_Intro() };
 		if (FAILED(pScene->Initialize()))
 			return nullptr;
 		return pScene;
 	}
-	void CIntro::Register_NetEventCallBack()
+	void CScene_Intro::Register_NetEventCallBack()
 	{
 		/* 기존 Default CallBack함수등록 */
 		m_pClientApp->Register_DefaultNetEvents();

@@ -1,42 +1,42 @@
 ﻿#include "pch.h"
-#include "CLogin.h"
+#include "CScene_Login.h"
 #include "CClientApp.h"
 
 
 namespace MafiaClient
 {
-	CLogin::CLogin()
+	CScene_Login::CScene_Login()
 		: CScene(), m_eStep{ STEP::INPUT }, m_strError{}, m_strNickname{}
 	{
 		m_eType = MafiaClient::SCENE::LOGIN;
 	}
-	CLogin::~CLogin()
+	CScene_Login::~CScene_Login()
 	{
 	}
 
-	HRESULT CLogin::Initialize()
+	HRESULT CScene_Login::Initialize()
 	{
 		if (FAILED(__super::Initialize())) return E_FAIL;
 
 		return S_OK;
 	}
 
-	void CLogin::Enter()
+	void CScene_Login::Enter()
 	{
 		__super::Enter();		/* 연결이 이미 있으므로 여기서 내 패킷 등록까지 끝남 */
 
 		m_eStep = STEP::INPUT;
 	}
 
-	void CLogin::Exit()
+	void CScene_Login::Exit()
 	{
 	}
 
-	void CLogin::Pre_Update()
+	void CScene_Login::Pre_Update()
 	{
 	}
 
-	void CLogin::Update()
+	void CScene_Login::Update()
 	{
 		/* 연결이 없으면(끊김) App이 CONNECT로 보내므로 여기서는 아무것도 안 함 */
 		if (m_pClientApp->Get_Client() == nullptr) return;
@@ -67,11 +67,11 @@ namespace MafiaClient
 		}
 	}
 
-	void CLogin::Late_Update()
+	void CScene_Login::Late_Update()
 	{
 	}
 
-	void CLogin::Render()
+	void CScene_Login::Render()
 	{
 		/* 응답 기다리는 동안 매 프레임 "로그인 중" 한 장씩 (블로킹 없이 → 그동안 패킷을 받을 수 있음) */
 		if (m_eStep != STEP::WAIT_LOGIN) return;
@@ -81,7 +81,7 @@ namespace MafiaClient
 		ConsoleUI::Draw_Progress(L"로그인 중", static_cast<int>(ullElapsed / 80), fProgress);
 	}
 
-	void CLogin::Do_Input()
+	void CScene_Login::Do_Input()
 	{
 		/* 로고 아래에 접속한 서버와 내 번호 표시 */
 		const Net::ClientKey iKey = m_pClientApp->Get_Client()->Get_ClientKey();
@@ -103,7 +103,7 @@ namespace MafiaClient
 		m_eStep = STEP::WAIT_LOGIN;			/* 응답은 프레임이 돌면서 받음, 화면은 Render에서 "로그인 중" */
 	}
 
-	void CLogin::Send_Login(const std::wstring& strNickname)
+	void CScene_Login::Send_Login(const std::wstring& strNickname)
 	{
 		/* 요청만 쌓임 → 이번 프레임 Late_Update에서 실제 전송 */
 		Protocol::C_TO_S_LOGIN tPacket{};
@@ -112,7 +112,7 @@ namespace MafiaClient
 	}
 
 	/* ---------------- 패킷 ---------------- */
-	void CLogin::Register_NetEventCallBack()
+	void CScene_Login::Register_NetEventCallBack()
 	{
 		/* 기존 Default CallBack함수등록 (끊김 정리 등) 먼저 */
 		m_pClientApp->Register_DefaultNetEvents();
@@ -122,7 +122,7 @@ namespace MafiaClient
 			pClient->Resigster_CallBackNetEvent(Net::NET_EVENT_TYPE::Receive_Packet, [this](const Net::Event& tEvent) { On_Packet(tEvent); });
 	}
 
-	void CLogin::On_Packet(const Net::Event& tEvent)
+	void CScene_Login::On_Packet(const Net::Event& tEvent)
 	{
 		switch (static_cast<Protocol::PACKET_TYPE>(tEvent.Get_PacketType()))
 		{
@@ -132,7 +132,7 @@ namespace MafiaClient
 		}
 	}
 
-	void CLogin::On_LoginSuccess(const Net::Event& tEvent)
+	void CScene_Login::On_LoginSuccess(const Net::Event& tEvent)
 	{
 		if (m_eStep != STEP::WAIT_LOGIN) return;
 
@@ -140,7 +140,7 @@ namespace MafiaClient
 		m_isLoginOk = true;
 	}
 
-	void CLogin::On_LoginFailed(const Net::Event& tEvent)
+	void CScene_Login::On_LoginFailed(const Net::Event& tEvent)
 	{
 		if (m_eStep != STEP::WAIT_LOGIN) return;
 
@@ -162,9 +162,9 @@ namespace MafiaClient
 		m_eStep = STEP::INPUT;
 	}
 
-	std::unique_ptr<CLogin> CLogin::Create()
+	std::unique_ptr<CScene_Login> CScene_Login::Create()
 	{
-		std::unique_ptr<CLogin> pScene{ new CLogin() };
+		std::unique_ptr<CScene_Login> pScene{ new CScene_Login() };
 		if (FAILED(pScene->Initialize()))
 			return nullptr;
 		return pScene;

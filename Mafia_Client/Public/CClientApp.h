@@ -42,13 +42,14 @@ namespace MafiaClient
 	public:
 		/* ---- Scene에서 사용 ---- */
 		/* 바로 바꾸지 않고 요청 큐에 쌓기만 함 → Render까지 끝난 프레임 맨 끝에서 교체 */
-		void	Change_Scene(SCENE eScene) { m_queueSceneRequests.push(eScene); }
+		/* anyArg : 그 Scene을 만들 때 넘길 데이터 (예: ROOM ← S_TO_C_ENTER_ROOM). 없으면 비워 둠 */
+		void	Change_Scene(SCENE eScene, std::any anyArg = {}) { m_queueSceneRequests.push({ eScene, std::move(anyArg) }); }
 		/* 콜백 안에서 연결을 끊고 싶을 때 : 표시만 하고, m_pClient->Pre_Update()가 끝난 뒤 App이 정리 */
 		void	Request_Disconnect() { m_isLostConnection = true; }
 		void	Quit() { m_isRunning = false; }
 		bool	Is_Running() const { return m_isRunning; }
 
-		/* 접속 성공 : 연결 보관 (CConnect) / 로그인 성공 : 닉네임 보관 (CLogin) */
+		/* 접속 성공 : 연결 보관 (CScene_Connect) / 로그인 성공 : 닉네임 보관 (CScene_Login) */
 		void	Set_Connection(std::unique_ptr<Net::CClient> pClient, const std::wstring& strServer);
 		void	Set_Nickname(const std::wstring& strNickname) { m_strNickname = strNickname; }
 		void	Disconnect();
@@ -66,7 +67,7 @@ namespace MafiaClient
 		void	Register_DefaultNetEvents();
 		void	Register_NetEvents(Net::NET_EVENT_TYPE eType, Net::NetEventFuntion func);
 	private:
-		std::unique_ptr<CScene>	Create_Scene(SCENE eScene);
+		std::unique_ptr<CScene>	Create_Scene(SCENE eScene, const std::any& anyArg);
 		void					Apply_SceneChange();
 	private:
 		inline static CClientApp* m_pInstance{ nullptr };
@@ -77,12 +78,16 @@ namespace MafiaClient
 		/* Scene */
 		std::unique_ptr<CScene>		m_pScene;
 		MafiaClient::SCENE			m_eCurScene;
-		std::queue<MafiaClient::SCENE>	m_queueSceneRequests;	/* 이번 프레임에 들어온 Scene 변경 요청 */
+		struct SceneRequest
+		{
+			MafiaClient::SCENE	eScene;
+			std::any			anyArg;		/* Scene마다 필요한 데이터 (없으면 비어 있음) */
+		};
+		std::queue<SceneRequest>		m_queueSceneRequests;	/* 이번 프레임에 들어온 Scene 변경 요청 */
 
 		/* 서버 연결 (나) */
 		std::unique_ptr<Net::CClient>	m_pClient;
 		bool							m_isLostConnection{ false };	/* 끊김 표시 → Pre_Update 끝에서 정리 */
 		std::wstring					m_strNickname;
-		std::wstring					m_strServer;		/* "127.0.0.1:1234" 화면 표시용 */
-	};
+		std::wstring					m_strServer;		/* "127.0.0.1:1234" 화면 표시용 */	};
 }

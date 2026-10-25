@@ -69,22 +69,22 @@
     <ClCompile Include="..\Private\Enum.cpp">
       <Filter>헤더 파일\Enum</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CIntro.cpp">
+    <ClCompile Include="..\Private\CScene_Intro.cpp">
       <Filter>소스 파일\01. Core\00. Scene\00. Intro</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CRoom.cpp">
+    <ClCompile Include="..\Private\CScene_Room.cpp">
       <Filter>소스 파일\01. Core\00. Scene\03. Room</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CConnect.cpp">
+    <ClCompile Include="..\Private\CScene_Connect.cpp">
       <Filter>소스 파일\01. Core\00. Scene\00. Connect</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CLogin.cpp">
+    <ClCompile Include="..\Private\CScene_Login.cpp">
       <Filter>소스 파일\01. Core\00. Scene\01. Login</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CLobby.cpp">
+    <ClCompile Include="..\Private\CScene_Lobby.cpp">
       <Filter>소스 파일\01. Core\00. Scene\02. Lobby</Filter>
     </ClCompile>
-    <ClCompile Include="..\Private\CGame.cpp">
+    <ClCompile Include="..\Private\CScene_Game.cpp">
       <Filter>소스 파일\01. Core\00. Scene\04. Game</Filter>
     </ClCompile>
     <ClCompile Include="..\Private\CScene.cpp">
@@ -101,22 +101,22 @@
     <ClInclude Include="..\Public\Enum.h">
       <Filter>헤더 파일\Enum</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CIntro.h">
+    <ClInclude Include="..\Public\CScene_Intro.h">
       <Filter>소스 파일\01. Core\00. Scene\00. Intro</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CGame.h">
+    <ClInclude Include="..\Public\CScene_Game.h">
       <Filter>소스 파일\01. Core\00. Scene\04. Game</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CLobby.h">
+    <ClInclude Include="..\Public\CScene_Lobby.h">
       <Filter>소스 파일\01. Core\00. Scene\02. Lobby</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CConnect.h">
+    <ClInclude Include="..\Public\CScene_Connect.h">
       <Filter>소스 파일\01. Core\00. Scene\00. Connect</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CLogin.h">
+    <ClInclude Include="..\Public\CScene_Login.h">
       <Filter>소스 파일\01. Core\00. Scene\01. Login</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CRoom.h">
+    <ClInclude Include="..\Public\CScene_Room.h">
       <Filter>소스 파일\01. Core\00. Scene\03. Room</Filter>
     </ClInclude>
     <ClInclude Include="..\Public\CScene.h">

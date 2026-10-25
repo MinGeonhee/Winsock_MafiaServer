@@ -13,6 +13,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <cwctype>
@@ -85,7 +86,16 @@ namespace ConsoleUI
 		{
 			if (tRecords[i].EventType != KEY_EVENT) continue;
 
-			const KEY_EVENT_RECORD& tKey = tRecords[i].Event.KeyEvent;
+			KEY_EVENT_RECORD tKey = tRecords[i].Event.KeyEvent;
+
+			/* 한글 입력 상태면 IME가 키를 가로채 VK_PROCESSKEY로 옴 → 스캔 코드(물리 키 위치)로 원래 키를 되찾음
+			   (한글 상태에서 C를 눌러도 'C'로 처리. 글자 입력은 uChar를 쓰므로 영향 없음) */
+			if (tKey.wVirtualKeyCode == VK_PROCESSKEY)
+			{
+				const UINT iVK = MapVirtualKeyW(tKey.wVirtualScanCode, MAPVK_VSC_TO_VK);
+				if (iVK != 0) tKey.wVirtualKeyCode = static_cast<WORD>(iVK);
+			}
+
 			bool& isHeld = s_isHeld[tKey.wVirtualKeyCode & 0xFF];
 
 			if (tKey.bKeyDown && (isHeld == false || isAllowRepeat))
@@ -368,7 +378,7 @@ namespace ConsoleUI
 	/* ---------------- 입력 카드 (서버 접속 / 로그인 공용) ---------------- */
 	namespace Detail
 	{
-		enum class FIELD_KIND { NICK, IP, PORT };
+		enum class FIELD_KIND { NICK, IP, PORT, TEXT };	// TEXT : 띄어쓰기 허용 (방 이름 등)
 
 		struct FormField
 		{
@@ -395,6 +405,7 @@ namespace ConsoleUI
 			case FIELD_KIND::NICK:	return ch != L' ' && strCur.size() < iMaxNickLen;
 			case FIELD_KIND::IP:	return (iswdigit(ch) || ch == L'.') && strCur.size() < 15;
 			case FIELD_KIND::PORT:	return iswdigit(ch) && strCur.size() < 5;
+			case FIELD_KIND::TEXT:	return !(ch == L' ' && strCur.empty()) && strCur.size() < iMaxNickLen;	// 맨 앞 띄어쓰기만 막음
 			}
 			return false;
 		}
@@ -405,7 +416,9 @@ namespace ConsoleUI
 							 const std::function<std::wstring(const std::vector<FormField>&, int&)>& fnValidate)
 		{
 			using namespace Color;
-			constexpr int	BOX_W = 44, FIELD_W = 26;
+			/* 입력 칸 폭 : 기본 26칸, 글자 제한이 길면 한글(2칸) 기준으로 늘림 → 카드도 같이 넓어짐 */
+			const int		FIELD_W = (std::max)(26, static_cast<int>(iMaxNickLen) * 2 + 3);
+			const int		BOX_W = FIELD_W + 18;
 			const int		iFieldCount = static_cast<int>(vecFields.size());
 
 			int				iFocus{ 0 };
@@ -653,6 +666,34 @@ namespace ConsoleUI
 		return { true, vecFields[0].strValue };
 	}
 
+	/* ---------------- 방 만들기 (방 이름) ---------------- */
+	struct CreateRoomResult
+	{
+		bool			isOk{ false };		// Esc로 나가면 false
+		std::wstring	strTitle;			// 끝 띄어쓰기는 잘라서 돌려줌
+	};
+
+	/* 로그인과 같은 카드. Enter = 만들기, Esc = 로비로
+	   끝나면 화면을 지운 상태이므로 부른 쪽(로비)은 다시 그려야 함 */
+	inline CreateRoomResult Run_CreateRoom(const std::wstring& strServerInfo, const std::wstring& strDefaultTitle = L"", const std::wstring& strError = L"", size_t iMaxTitleLen = 20)
+	{
+		std::vector<Detail::FormField> vecFields = { { L"방 이름", strDefaultTitle, Detail::FIELD_KIND::TEXT } };
+		const Detail::FormText tText{ L" 방 만 들 기 ", strServerInfo, L"  Enter  만들기  ",
+			{ { L"[Enter]", L"만들기" }, { L"[Esc]", L"로비로" } } };
+
+		auto fnValidate = [](const std::vector<Detail::FormField>& vecF, int& iFocus) -> std::wstring
+		{
+			if (vecF[0].strValue.find_first_not_of(L' ') == std::wstring::npos) { iFocus = 0; return L"방 이름을 입력하세요."; }
+			return L"";
+		};
+
+		if (Detail::Run_Form(tText, vecFields, strError, iMaxTitleLen, fnValidate) == false) return {};
+
+		std::wstring strTitle = vecFields[0].strValue;
+		strTitle.erase(strTitle.find_last_not_of(L' ') + 1);
+		return { true, strTitle };
+	}
+
 	/* ---------------- 로비 (방 목록 선택 + 접속 중) ---------------- */
 	struct RoomView
 	{
@@ -660,8 +701,7 @@ namespace ConsoleUI
 		std::wstring	strName;
 		int				iCur{ 0 };
 		int				iMax{ 7 };
-		std::wstring	strState;			// "대기 중", "게임 중 · 낮 2일차" 등
-		bool			isPlaying{ false };	// 게임 중이면 회색으로
+		bool			isPlaying{ false };	// 상태 칸 "게임 중"(회색) / "대기 중"
 	};
 
 	/* 접속 중 목록 한 줄 (서버가 보내준 플레이어 정보를 화면용으로) */
@@ -721,13 +761,13 @@ namespace ConsoleUI
 		{
 			std::wstring strRoom;
 			if (iRow == -1)
-				strRoom = std::wstring(Gray) + Fit(L"     번호    방 이름              인원    상태", ROOM_W) + Reset;
+				strRoom = std::wstring(Gray) + Fit(L"     번호    방 이름                       인원    상태", ROOM_W) + Reset;
 			else if (iFirst + iRow < iRoomCount)
 			{
 				const int iIndex = iFirst + iRow;
 				const RoomView& tRoom = tView.vecRooms[iIndex];
 				const std::wstring strNo = L"[ " + std::to_wstring(tRoom.iNo) + L" ]";
-				const std::wstring strBody = Fit(strNo, 8) + Fit(tRoom.strName, 21) + Fit(std::to_wstring(tRoom.iCur) + L"/" + std::to_wstring(tRoom.iMax), 8) + tRoom.strState;
+				const std::wstring strBody = Fit(strNo, 8) + Fit(tRoom.strName, 30) + Fit(std::to_wstring(tRoom.iCur) + L"/" + std::to_wstring(tRoom.iMax), 8) + (tRoom.isPlaying ? L"게임 중" : L"대기 중");
 
 				if (iIndex == iSel)			strRoom = std::wstring(Detail::SELECT) + L" ▶  " + Fit(strBody, ROOM_W - 4) + Reset;
 				else if (tRoom.isPlaying)	strRoom = std::wstring(Gray) + L"    " + Fit(strBody, ROOM_W - 4) + Reset;
@@ -773,6 +813,312 @@ namespace ConsoleUI
 		str += Yellow; str += L"[R]"; str += Reset; str += L" 새로고침   ";
 		str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기";
 		str += L"\x1b[K\x1b[J";
+		/* (숨긴) 커서를 맨 위 빈 줄로 : 한글 상태에서 키를 누르면 IME 조합 글자(ㅊ 등)가 커서 위치에 뜨므로
+		   안내 문구 끝("나가기ㅊ")이 아니라 아무것도 없는 곳에 두기 */
+		str += L"\x1b[1;1H";
+		Write(str);
+
+		/* 로비 위에서 Draw_Progress("입장하는 중")를 그릴 줄 = 안내 줄 바로 아래
+		   빈 줄 1 + 로고 6 + 구분선 1 + 빈 줄 1 + 박스 위 1 + 목록 10 + 박스 아래 1 + 안내 1 = 22 → 23번째 줄 */
+		Detail::g_iStatusRow = 23;
+	}
+
+	/* ---------------- 방 (원탁 + 채팅) ---------------- */
+	/* 좌석 한 칸 (1번 = 맨 위, 시계 방향). strName이 비면 빈자리 */
+	struct SeatView
+	{
+		std::wstring	strName;
+		bool			isMe{ false };		// 파란색
+		bool			isMaster{ false };	// ★
+		bool			isDead{ false };	// 회색 (게임 중)
+		std::wstring	strTag;				// 의자 아래 테두리에 표시 ("투표 2", "마피아" 등, 비면 없음)
+	};
+
+	/* 채팅 한 줄 */
+	struct ChatView
+	{
+		std::wstring	strName;			// isSystem이면 안 씀
+		std::wstring	strText;
+		bool			isMe{ false };
+		bool			isSystem{ false };	// "── 민수 님이 들어왔습니다 ──" 같은 회색 알림 줄
+	};
+
+	struct RoomScreenView
+	{
+		int						iRoomNo{ 0 };
+		std::wstring			strTitle;
+		bool					isMaster{ false };	// 내가 방장이면 [F5] 시작 안내
+		std::array<SeatView, 7>	arrSeats;
+		/* 탁자 가운데 : 대기 중 = "대 기 중" + 인원 / 게임 중 = 낮·밤 + 일차 + strSub */
+		bool					isPlaying{ false };
+		bool					isNight{ false };
+		int						iDay{ 0 };
+		std::wstring			strSub;				// "0 : 25", "마피아가 고르는 중" 등
+		std::vector<ChatView>	vecChats;			// 오래된 것 → 최근. 화면에 들어가는 만큼 끝에서부터 그림
+		std::wstring			strInput;			// 입력 중인 채팅
+	};
+
+	/* 한 줄 입력 (막지 않음) : Scene이 Poll_Keys(true)로 받은 키를 하나씩 넘김
+	   Enter = SUBMIT (보낸 뒤 비우는 건 부른 쪽), 글자 / 지우기 = CHANGED */
+	enum class LINE_INPUT { NONE, CHANGED, SUBMIT };
+
+	inline LINE_INPUT Edit_Line(std::wstring& strLine, const KEY_EVENT_RECORD& tKey, size_t iMaxLen)
+	{
+		const wchar_t ch = tKey.uChar.UnicodeChar;
+		if (tKey.wVirtualKeyCode == VK_RETURN) return LINE_INPUT::SUBMIT;
+		if (tKey.wVirtualKeyCode == VK_BACK)
+		{
+			if (strLine.empty()) return LINE_INPUT::NONE;
+			strLine.pop_back();
+			if (!strLine.empty() && strLine.back() >= 0xD800 && strLine.back() <= 0xDBFF) strLine.pop_back();	// 이모지 반쪽 정리
+			return LINE_INPUT::CHANGED;
+		}
+		if (ch >= 32 && strLine.size() < iMaxLen && !(ch == L' ' && strLine.empty()))
+		{
+			strLine += ch;
+			return LINE_INPUT::CHANGED;
+		}
+		return LINE_INPUT::NONE;
+	}
+
+	namespace Detail
+	{
+		/* 칸 단위 그림판 : 좌표에 글자를 찍고 줄 단위 문자열로 꺼냄 (한글 2칸 처리)
+		   원탁처럼 여기저기 흩어진 것을 그릴 때 사용 */
+		class CCanvas
+		{
+		public:
+			CCanvas(int iW, int iH) : m_iW{ iW }, m_iH{ iH }, m_vecCells(static_cast<size_t>(iW * iH)) {}
+
+			void Put(int iRow, int iCol, const std::wstring& str, const wchar_t* szColor = nullptr)
+			{
+				for (wchar_t ch : str)
+				{
+					const int iW = Char_Width(ch);
+					if (iRow >= 0 && iRow < m_iH && iCol >= 0 && iCol + iW <= m_iW)
+					{
+						At(iRow, iCol) = { ch, szColor, false };
+						if (iW == 2) At(iRow, iCol + 1) = { L' ', szColor, true };
+					}
+					iCol += iW;
+				}
+			}
+
+			std::wstring Line(int iRow) const
+			{
+				std::wstring str;
+				const wchar_t* szCur{ nullptr };
+				for (int i = 0; i < m_iW; ++i)
+				{
+					const Cell& tCell = m_vecCells[static_cast<size_t>(iRow * m_iW + i)];
+					if (tCell.isCont) continue;
+					if (tCell.szColor != szCur) { str += Color::Reset; if (tCell.szColor) str += tCell.szColor; szCur = tCell.szColor; }
+					str += tCell.ch;
+				}
+				return str + Color::Reset;
+			}
+
+		private:
+			struct Cell { wchar_t ch{ L' ' }; const wchar_t* szColor{ nullptr }; bool isCont{ false }; };	// isCont : 한글 오른쪽 반 칸
+			Cell& At(int iRow, int iCol) { return m_vecCells[static_cast<size_t>(iRow * m_iW + iCol)]; }
+
+			int					m_iW, m_iH;
+			std::vector<Cell>	m_vecCells;
+		};
+
+		/* 폭 iWidth 안에서 가운데 정렬할 때 왼쪽 여백 */
+		inline int Center_Col(const std::wstring& str, int iWidth) { return (std::max)(0, (iWidth - Width(str)) / 2); }
+
+		/* 글자 폭 기준으로 줄 나누기 (첫 줄 iFirstW, 나머지 iRestW) */
+		inline std::vector<std::wstring> Wrap(const std::wstring& str, int iFirstW, int iRestW)
+		{
+			std::vector<std::wstring> vecLines;
+			std::wstring strCur;
+			int iUsed{ 0 }, iLimit{ iFirstW };
+			for (wchar_t ch : str)
+			{
+				const int iW = Char_Width(ch);
+				if (iUsed + iW > iLimit) { vecLines.push_back(strCur); strCur.clear(); iUsed = 0; iLimit = iRestW; }
+				strCur += ch;
+				iUsed += iW;
+			}
+			vecLines.push_back(strCur);
+			return vecLines;
+		}
+	}
+
+	/* 방 화면 : 왼쪽 원탁(7석) + 오른쪽 채팅 + 아래 입력 줄
+	   매 프레임 불러도 되지만 바뀐 게 있을 때만 부르는 게 좋음 (Need_Redraw()와 같이 사용 가능) */
+	inline void Render_Room(const RoomScreenView& tView)
+	{
+		using namespace Color;
+		constexpr int AREA_W = 66, TABLE_AREA_H = 17;	// 원탁 영역 (원탁 자체는 17줄)
+		constexpr int CHAIR_W = 16;						// 의자 바깥 폭 (이름 칸 14 = "★ " + 한글 6자)
+		constexpr int TABLE_COL = 18, TABLE_W = 30, TABLE_H = 9;
+
+		/* 창 크기에 맞춰 채팅 박스를 늘림 (세로 : 위 4줄 + 아래 입력 3줄 + 안내 1줄 + 여유 1줄 / 가로 : 남는 폭 전부) */
+		int iCols{ 0 }, iRows{ 0 };
+		Get_ConsoleSize(iCols, iRows);
+		const int AREA_H  = (std::max)(TABLE_AREA_H, iRows - 9);
+		const int CHAT_W  = (std::max)(36, iCols - AREA_W - 7);		// 채팅 박스 안쪽 폭
+		const int TOTAL_W = AREA_W + 2 + CHAT_W + 2;
+		const int iTop    = (AREA_H - TABLE_AREA_H) / 2;				// 원탁은 세로 가운데
+		const int TABLE_ROW = iTop + 4;
+
+		static const wchar_t* const ME		= L"\x1b[1;94m";	// 나 : 파랑
+		static const wchar_t* const NAME	= L"\x1b[1;97m";	// 다른 사람 : 흰색
+		static const wchar_t* const WOOD	= L"\x1b[33m";		// 탁자 테두리 : 어두운 금색
+		static const wchar_t* const NIGHT	= L"\x1b[1;94m";
+		static const wchar_t* const DAY		= L"\x1b[1;93m";
+
+		/* ---- 원탁 ---- */
+		Detail::CCanvas tCanvas(AREA_W, AREA_H);
+
+		tCanvas.Put(TABLE_ROW, TABLE_COL, L"╭" + std::wstring(TABLE_W - 2, L'─') + L"╮", WOOD);
+		for (int i = 1; i < TABLE_H - 1; ++i)
+		{
+			tCanvas.Put(TABLE_ROW + i, TABLE_COL, L"│", WOOD);
+			tCanvas.Put(TABLE_ROW + i, TABLE_COL + 1, std::wstring(TABLE_W - 2, L'░'), Gray);
+			tCanvas.Put(TABLE_ROW + i, TABLE_COL + TABLE_W - 1, L"│", WOOD);
+		}
+		tCanvas.Put(TABLE_ROW + TABLE_H - 1, TABLE_COL, L"╰" + std::wstring(TABLE_W - 2, L'─') + L"╯", WOOD);
+
+		/* 탁자 가운데 글자 (앞뒤 한 칸씩 띄워 천 무늬와 붙지 않게) */
+		int iSeated{ 0 };
+		for (const SeatView& tSeat : tView.arrSeats) if (!tSeat.strName.empty()) ++iSeated;
+
+		auto Table_Text = [&](int iRow, const std::wstring& str, const wchar_t* szColor)
+		{
+			const std::wstring strPad = L" " + str + L" ";
+			tCanvas.Put(TABLE_ROW + iRow, TABLE_COL + 1 + Detail::Center_Col(strPad, TABLE_W - 2), strPad, szColor);
+		};
+		if (tView.isPlaying)
+		{
+			Table_Text(3, (tView.isNight ? L"밤" : L"낮") + std::wstring(L"  ·  ") + std::to_wstring(tView.iDay) + L"일차", tView.isNight ? NIGHT : DAY);
+			if (!tView.strSub.empty()) Table_Text(5, tView.strSub, NAME);
+		}
+		else
+		{
+			Table_Text(3, L"대 기 중", NAME);
+			Table_Text(5, std::to_wstring(iSeated) + L" / 7", Gray);
+		}
+
+		/* 의자 7개 : 1번 맨 위부터 시계 방향 (행, 열) */
+		static constexpr int SEAT_POS[7][2] = { { 0, 25 }, { 3, 50 }, { 10, 50 }, { 14, 34 }, { 14, 16 }, { 10, 0 }, { 3, 0 } };
+		for (int i = 0; i < 7; ++i)
+		{
+			const SeatView& tSeat = tView.arrSeats[i];
+			const int iRow = iTop + SEAT_POS[i][0], iCol = SEAT_POS[i][1];
+			const std::wstring strNo = std::to_wstring(i + 1);
+
+			if (tSeat.strName.empty())
+			{
+				/* 빈자리 : 점선 의자 */
+				tCanvas.Put(iRow,     iCol, L"┌" + strNo + std::wstring(CHAIR_W - 3, L'┄') + L"┐", Gray);
+				tCanvas.Put(iRow + 1, iCol, L"┆" + Spaces(CHAIR_W - 2) + L"┆", Gray);
+				tCanvas.Put(iRow + 2, iCol, L"└" + std::wstring(CHAIR_W - 2, L'┄') + L"┘", Gray);
+				continue;
+			}
+
+			const wchar_t* szName = tSeat.isDead ? Gray : (tSeat.isMe ? ME : NAME);
+			const wchar_t* szLine = tSeat.isDead ? Gray : (tSeat.isMe ? ME : L"\x1b[37m");
+			const std::wstring strName = (tSeat.isMaster ? L"★ " : L"") + tSeat.strName;	// ★는 터미널에서 1칸보다 넓게 그려져 뒤에 한 칸 띄움
+			const std::wstring strFit = Fit(strName, CHAIR_W - 2);			// 길면 자름
+			const int iNameW = (std::min)(Width(strName), CHAIR_W - 2);
+
+			tCanvas.Put(iRow, iCol, L"┌", szLine);
+			tCanvas.Put(iRow, iCol + 1, strNo, Gray);
+			tCanvas.Put(iRow, iCol + 2, std::wstring(CHAIR_W - 3, L'─') + L"┐", szLine);
+
+			tCanvas.Put(iRow + 1, iCol, L"│" + Spaces(CHAIR_W - 2) + L"│", szLine);
+			const int iNameCol = iCol + 1 + (CHAIR_W - 2 - iNameW) / 2;
+			if (tSeat.isMaster)
+			{
+				tCanvas.Put(iRow + 1, iNameCol, L"★", Yellow);
+				tCanvas.Put(iRow + 1, iNameCol + 2, strFit.substr(2, strFit.find_last_not_of(L' ') - 1), szName);
+			}
+			else
+				tCanvas.Put(iRow + 1, iNameCol, strFit.substr(0, strFit.find_last_not_of(L' ') + 1), szName);
+
+			/* 아래 테두리 : 태그가 있으면 └─투표 2──┘ */
+			tCanvas.Put(iRow + 2, iCol, L"└" + std::wstring(CHAIR_W - 2, L'─') + L"┘", szLine);
+			if (!tSeat.strTag.empty())
+			{
+				const std::wstring strTag = Fit(tSeat.strTag, CHAIR_W - 4);
+				tCanvas.Put(iRow + 2, iCol + 2, strTag.substr(0, strTag.find_last_not_of(L' ') + 1), tSeat.isDead ? Gray : Yellow);
+			}
+		}
+
+		/* ---- 채팅 : 화면에 들어가는 줄만 끝에서부터 ---- */
+		const int CHAT_ROWS = AREA_H - 2, TEXT_W = CHAT_W - 2;
+		std::vector<std::wstring> vecChatLines;		// 색 포함, 폭 TEXT_W로 맞춘 줄 (최근 → 오래된 순으로 모았다가 뒤집음)
+		for (auto iter = tView.vecChats.rbegin(); iter != tView.vecChats.rend() && static_cast<int>(vecChatLines.size()) < CHAT_ROWS; ++iter)
+		{
+			std::vector<std::wstring> vecMsg;
+			if (iter->isSystem)
+			{
+				const std::wstring strSys = L"── " + iter->strText + L" ──";
+				vecMsg.push_back(Spaces(Detail::Center_Col(strSys, TEXT_W)) + Gray + Fit(strSys, TEXT_W - Detail::Center_Col(strSys, TEXT_W)) + Reset);
+			}
+			else
+			{
+				const std::wstring strName = Fit(iter->strName, Width(iter->strName));
+				const int iIndent = Width(strName) + 2;
+				const std::vector<std::wstring> vecParts = Detail::Wrap(iter->strText, TEXT_W - iIndent, TEXT_W - iIndent);
+				for (size_t i = 0; i < vecParts.size(); ++i)
+				{
+					const std::wstring strHead = (i == 0) ? std::wstring(iter->isMe ? ME : Yellow) + strName + Reset + L"  " : Spaces(iIndent);
+					vecMsg.push_back(strHead + Fit(vecParts[i], TEXT_W - iIndent));
+				}
+			}
+			for (auto it = vecMsg.rbegin(); it != vecMsg.rend() && static_cast<int>(vecChatLines.size()) < CHAT_ROWS; ++it)
+				vecChatLines.push_back(*it);
+		}
+		std::reverse(vecChatLines.begin(), vecChatLines.end());
+		while (static_cast<int>(vecChatLines.size()) < CHAT_ROWS) vecChatLines.push_back(Spaces(TEXT_W));
+
+		/* ---- 조립 ---- */
+		/* 머리 줄 : 왼쪽 "MAFIA   [ 3 ] 방 이름" / 오른쪽 "인원 4/7  ·  대기 중" */
+		const std::wstring strRoom  = L"[ " + std::to_wstring(tView.iRoomNo) + L" ] " + tView.strTitle;
+		const std::wstring strCount = std::to_wstring(iSeated);
+		const std::wstring strState = tView.isPlaying ? L"게임 중" : L"대기 중";
+		const std::wstring strLeft  = std::wstring(Red) + Bold + L"MAFIA" + Reset + L"   " + Bold + strRoom + Reset;
+		const std::wstring strRight = std::wstring(Gray) + L"인원 " + Reset + Yellow + strCount + Reset + Gray + L"/7  ·  " + Reset
+									+ (tView.isPlaying ? Red : Green) + strState + Reset;
+		const int iGap = TOTAL_W - (8 + Width(strRoom)) - Width(L"인원 " + strCount + L"/7  ·  " + strState);
+
+		std::wstring str = L"\x1b[H\x1b[K\n";
+		str += L"  " + strLeft + Spaces(iGap) + strRight + L"\x1b[K\n";
+		str += L"  "; str += Gray; str += std::wstring(TOTAL_W, L'─'); str += Reset; str += L"\x1b[K\n\x1b[K\n";
+
+		for (int iRow = 0; iRow < AREA_H; ++iRow)
+		{
+			std::wstring strChat;
+			if (iRow == 0)					strChat = std::wstring(Gray) + L"┌─" + Reset + Bold + L" 채팅 " + Reset + Gray + std::wstring(CHAT_W - 1 - 6, L'─') + L"┐" + Reset;
+			else if (iRow == AREA_H - 1)	strChat = std::wstring(Gray) + L"└" + std::wstring(CHAT_W, L'─') + L"┘" + Reset;
+			else							strChat = std::wstring(Gray) + L"│" + Reset + L" " + vecChatLines[iRow - 1] + L" " + Gray + L"│" + Reset;
+			str += L"  " + tCanvas.Line(iRow) + L"  " + strChat + L"\x1b[K\n";
+		}
+
+		/* 입력 줄 : 길면 끝부분만 보이게 */
+		const int INPUT_W = TOTAL_W - 2;
+		std::wstring strShown = tView.strInput;
+		while (Width(strShown) > INPUT_W - 5) strShown.erase(0, 1);
+		str += L"  "; str += Gray; str += L"┌" + std::wstring(INPUT_W, L'─') + L"┐"; str += Reset; str += L"\x1b[K\n";
+		str += L"  "; str += Gray; str += L"│"; str += Reset; str += L" "; str += Yellow; str += L"▸ "; str += Reset;
+		str += strShown; str += Detail::CURSOR; str += L" "; str += Reset; str += Spaces(INPUT_W - 4 - Width(strShown));
+		str += Gray; str += L"│"; str += Reset; str += L"\x1b[K\n";
+		str += L"  "; str += Gray; str += L"└" + std::wstring(INPUT_W, L'─') + L"┘"; str += Reset; str += L"\x1b[K\n";
+
+		str += L"  ";
+		str += Yellow; str += L"[Enter]"; str += Reset; str += L" 보내기   ";
+		if (tView.isMaster && !tView.isPlaying) { str += Yellow; str += L"[F5]"; str += Reset; str += L" 게임 시작   "; }
+		str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기";
+		str += L"\x1b[K\x1b[J";
+
+		/* (숨긴) 진짜 커서를 입력 글자 끝으로 → 한글 IME 조합 글자가 입력 줄에 뜸
+		   행 : 빈 줄 1 + 머리 1 + 구분선 1 + 빈 줄 1 + 원탁 17 + 입력 위 테두리 1 = 22 → 23번째 줄 */
+		str += L"\x1b[" + std::to_wstring(4 + AREA_H + 2) + L";" + std::to_wstring(2 + 1 + 3 + Width(strShown) + 1) + L"H";
 		Write(str);
 	}
 

@@ -6,12 +6,12 @@
 namespace MafiaClient
 {
 	/* 서버 접속 : IP / 포트 입력 → connect → 성공하면 LOGIN (로그인은 연결된 뒤에 따로) */
-	class CConnect : public CScene
+	class CScene_Connect : public CScene
 	{
 	protected:
-		CConnect();
+		CScene_Connect();
 	public:
-		virtual ~CConnect();
+		virtual ~CScene_Connect();
 	protected:
 		HRESULT	Initialize() override;
 		void	Register_NetEventCallBack() override;
@@ -25,7 +25,7 @@ namespace MafiaClient
 	private:
 		bool	Try_Connect(const ConsoleUI::ConnectResult& tResult);
 	public:
-		static std::unique_ptr<CConnect> Create();
+		static std::unique_ptr<CScene_Connect> Create();
 	private:
 		std::wstring	m_strError;		/* 다음 입력 화면에 빨간 줄로 띄울 사유 */
 

@@ -3,12 +3,12 @@
 
 #include "ConsoleUI.h"
 #include "CScene.h"
-#include "CIntro.h"
-#include "CConnect.h"
-#include "CLogin.h"
-#include "CLobby.h"
-#include "CRoom.h"
-#include "CGame.h"
+#include "CScene_Intro.h"
+#include "CScene_Connect.h"
+#include "CScene_Login.h"
+#include "CScene_Lobby.h"
+#include "CScene_Room.h"
+#include "CScene_Game.h"
 
 namespace MafiaClient
 {
@@ -146,16 +146,21 @@ namespace MafiaClient
 		m_isLostConnection = true;
 	}
 
-	std::unique_ptr<CScene> CClientApp::Create_Scene(SCENE eScene)
+	std::unique_ptr<CScene> CClientApp::Create_Scene(SCENE eScene, const std::any& anyArg)
 	{
 		switch (eScene)
 		{
-		case SCENE::INTRO:	return CIntro::Create();
-		case SCENE::CONNECT:return CConnect::Create();
-		case SCENE::LOGIN:	return CLogin::Create();
-		case SCENE::LOBBY:	return CLobby::Create();
-		case SCENE::ROOM:	return CRoom::Create();
-		case SCENE::GAME:	return CGame::Create();
+		case SCENE::INTRO:	return CScene_Intro::Create();
+		case SCENE::CONNECT:return CScene_Connect::Create();
+		case SCENE::LOGIN:	return CScene_Login::Create();
+		case SCENE::LOBBY:	return CScene_Lobby::Create();
+		case SCENE::ROOM:
+		{
+			/* 방 정보 없이는 방으로 못 감 (타입이 다르면 nullptr → 현재 Scene 유지) */
+			const auto* pInfo = std::any_cast<Protocol::S_TO_C_ENTER_ROOM>(&anyArg);
+			return pInfo ? CScene_Room::Create(*pInfo) : nullptr;
+		}
+		case SCENE::GAME:	return CScene_Game::Create();
 		default:			return nullptr;
 		}
 	}
@@ -166,12 +171,13 @@ namespace MafiaClient
 		   (중간 Scene을 만들었다 바로 지우면 Enter가 두 번 돌아 화면·등록이 꼬임) */
 		if (m_queueSceneRequests.empty()) return;
 
-		MafiaClient::SCENE eNext = m_queueSceneRequests.back();
+		SceneRequest tNext = std::move(m_queueSceneRequests.back());
 		while (!m_queueSceneRequests.empty()) m_queueSceneRequests.pop();
+		const MafiaClient::SCENE eNext = tNext.eScene;
 
 		if (eNext == m_eCurScene) return;
 
-		std::unique_ptr<CScene> pNext = Create_Scene(eNext);
+		std::unique_ptr<CScene> pNext = Create_Scene(eNext, tNext.anyArg);
 		if (pNext == nullptr) return;	/* 만들기 실패 → 현재 Scene 유지 */
 
 		if (m_pScene) m_pScene->Exit();

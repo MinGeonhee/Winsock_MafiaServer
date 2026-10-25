@@ -45,9 +45,6 @@
     <ClInclude Include="..\Public\Protocol_Header.h">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\Public\CPlayer.h">
-      <Filter>Core\Player</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Private\Struct.cpp">
@@ -58,9 +55,6 @@
     </ClCompile>
     <ClCompile Include="..\Private\pch.cpp">
       <Filter>Header\Pch</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Private\CPlayer.cpp">
-      <Filter>Core\Player</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

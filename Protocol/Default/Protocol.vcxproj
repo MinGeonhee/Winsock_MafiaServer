@@ -139,7 +139,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\Public\CPlayer.h" />
     <ClInclude Include="..\Public\Enum.h" />
     <ClInclude Include="..\Public\Funtion.h" />
     <ClInclude Include="..\Public\pch.h" />
@@ -147,7 +146,6 @@
     <ClInclude Include="..\Public\Struct.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Private\CPlayer.cpp" />
     <ClCompile Include="..\Private\Enum.cpp" />
     <ClCompile Include="..\Private\Struct.cpp" />
     <ClCompile Include="..\Private\pch.cpp">

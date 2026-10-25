@@ -4,10 +4,21 @@
 
 namespace Protocol
 {
-	/* 닉네임 제한 크기 10글자 */
+	using ROOM_KEY = uint64_t;
+
+	/* 닉네임 제한 길이 10글자 */
 	constexpr size_t MAX_NICKNAME_LEN  = 10;
 	constexpr size_t MAX_NICNAME_BUF   = 16;
 	constexpr size_t MAX_ONLINE_PLAYER = 20;     // 한 패킷에 담는 최대 인원
+
+	/* 방 이름 제한 길이 20 글자 */
+	constexpr size_t   MAX_ROOMNAME_LEN = 20;
+	constexpr size_t   MAX_ROOMNAME_BUF = 32;
+	constexpr uint16_t MAX_ROOM_PLAYER	= 7;
+
+	constexpr uint16_t MAX_ROOM_PACKET_COUNT = 10;
+
+
 	enum class CHECK_NAME : uint16_t
 	{
 		OK,
@@ -16,6 +27,7 @@ namespace Protocol
 		INVALID_CHARACTER,
 		END
 	};
+
 
 	/* 플레이어가 지금 어디 있는지 */
 	enum class PLAYER_STATE : uint16_t
@@ -28,17 +40,23 @@ namespace Protocol
 
 	enum class PACKET_TYPE : uint16_t
 	{
-		C_TO_S_LOGIN				 = 0, // 로그인 => 닉네임 이이디 비밀번호
-		S_TO_C_LOGIN				 = 1, // 로그인 => 닉네임 이이디 비밀번호
-		S_TO_C_LOGIN_FAILED			 = 2, // 로그인 실패 => 사유
-		C_TO_S_REQ_DATA				 = 3, // 데이터 요청
-		S_TO_C_PROVIDE_DATA			 = 4, // 데이터 받기
+		C_TO_S_REQ_DATA	= 0,		// 데이터 요청
+		S_TO_C_PROVIDE_DATA,		// 데이터 받기
+		C_TO_S_LOGIN,				// 로그인 => 닉네임 이이디 비밀번호
+		S_TO_C_LOGIN,				// 로그인 => 닉네임 이이디 비밀번호
+		S_TO_C_LOGIN_FAILED,		// 로그인 실패 => 사유
+		C_TO_S_CREATE_ROOM,			// 방 만들기 요청
+		C_TO_S_ENTER_ROOM,			// 방 들어가기 요청
+		C_TO_S_EXIT_ROOM,			// 방 나가기   요청 (본문 없음)
+		S_TO_C_ENTER_ROOM,			// 방 입장 성공 (방을 만든 사람도 이걸 받음)
+		S_TO_C_ROOM_MEMBERS,		// 방 자리 바뀜 (누가 들어오거나 나감) → 방에 남은 사람 전원에게
 		END
 	};
 
 	enum class DATA_TYPE : uint16_t
 	{
-		PLAYER_INFOS = 0,
+		LOBBY_PLAYERS = 0,		// 로비 접속자 목록
+		LOBBY_ROOMS   = 1,		// 로비 방 목록
 		END
 	};
 

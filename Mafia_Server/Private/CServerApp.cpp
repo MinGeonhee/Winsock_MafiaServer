@@ -9,7 +9,7 @@
 namespace MafiaServer
 {
 	CServerApp::CServerApp()
-		: m_pMainServer{nullptr} , m_isDirty{false} , m_pPlayerManager{}
+		: m_pMainServer{nullptr} , m_isDirty{false} , m_pPlayerManager{ nullptr }, m_pRoomManager{ nullptr }
 	{
 	}
 	CServerApp::~CServerApp()
@@ -44,6 +44,11 @@ namespace MafiaServer
 		/* Player Manager 만들기 */
 		m_pPlayerManager = CPlayerManager::Get_Instance();
 		if (FAILED(m_pPlayerManager->Initialize(tData.tPlayerManager_InitData))) return E_FAIL;
+
+
+		/* Room Manager 만들기 */
+		m_pRoomManager = CRoomManager::Get_Instance();
+		if (FAILED(m_pRoomManager->Initialize(tData.tRoomManager_InitData))) return E_FAIL;
 
 		return S_OK;
 	}
@@ -175,6 +180,24 @@ namespace MafiaServer
 			Handle_RequestData(tEvent);
 			break;
 		}
+		/* 방 생성 처리 */
+		case Protocol::PACKET_TYPE::C_TO_S_CREATE_ROOM:
+		{
+			Handle_CreateRoom(tEvent);
+			break;
+		}
+		/* 방 들어가기 */
+		case Protocol::PACKET_TYPE::C_TO_S_ENTER_ROOM:
+		{
+			Handle_EnterRoom(tEvent);
+			break;
+		}
+		/* 방 나가기 (본문 없음) */
+		case Protocol::PACKET_TYPE::C_TO_S_EXIT_ROOM:
+		{
+			Leave_Room(tEvent.iKey);
+			break;
+		}
 		case Protocol::PACKET_TYPE::END:			break;
 		default:									break;
 		}
@@ -186,42 +209,172 @@ namespace MafiaServer
 
 	void CServerApp::On_Disconnect(const Net::Event& tEvent)
 	{
-		/* TODO: tEvent.iKey의 CPlayer 정리 (방에서 빼기 등) */
 		/* 로그인했던 사람만 로그아웃 (지우기 전에 닉네임 꺼내 두기) */
-		const Protocol::CPlayer* pPlayer = m_pPlayerManager->Find_Player(tEvent.iKey);
+		const CPlayer* pPlayer = m_pPlayerManager->Find_Player(tEvent.iKey);
 		if (pPlayer == nullptr) return;
 		const std::wstring strNickname = pPlayer->Get_Nickname();
 
+		Leave_Room(tEvent.iKey);		/* 방에 있었으면 먼저 빼기 (안 빼면 빈 의자가 남음) */
 		if (m_pPlayerManager->LogOut_Player(tEvent.iKey) == false) return;
 
 		m_pMainServer->Add_CustomLog(tEvent.iKey, L"로그아웃 (" + strNickname + L")");
 		m_isDirty = true;
 	}
 
+	void CServerApp::Handle_CreateRoom(const Net::Event& tEvent)
+	{
+		if (tEvent.Get_BodyLen() != sizeof(Protocol::C_TO_S_CREATE_ROOM)) return;
+		Protocol::C_TO_S_CREATE_ROOM tBody{};
+		memcpy(&tBody, tEvent.Get_Body(), sizeof(tBody));
+		tBody.wszRoomName[Protocol::MAX_ROOMNAME_BUF - 1] = L'\0';		/* 받은 값은 끝을 막아 둠 */
+
+		/* 로그인했고 로비에 있는 사람만 (이미 방에 있는 사람이 또 만들기 막기) */
+		const CPlayer* pPlayer = m_pPlayerManager->Find_Player(tEvent.iKey);
+		if (pPlayer == nullptr || pPlayer->Get_State() != Protocol::PLAYER_STATE::LOBBY) return;
+
+		/* TODO: 실패 이유 패킷 (지금은 실패하면 응답 없음 → 클라는 시간 초과로 로비 복귀) */
+		const Protocol::ROOM_KEY iRoomKey = m_pRoomManager->Create_Room(tBody.wszRoomName, tEvent.iKey);
+		if (iRoomKey == 0) return;
+
+		m_pPlayerManager->Set_PlayerState(tEvent.iKey, Protocol::PLAYER_STATE::ROOM);
+		Send_EnterRoom(tEvent.iKey, iRoomKey);
+		m_pMainServer->Add_CustomLog(tEvent.iKey, L"방 생성 (#" + std::to_wstring(iRoomKey) + L" " + tBody.wszRoomName + L")");
+		m_isDirty = true;
+	}
+
+	void CServerApp::Handle_EnterRoom(const Net::Event& tEvent)
+	{
+		if (tEvent.Get_BodyLen() != sizeof(Protocol::C_TO_S_ENTER_ROOM)) return;
+		Protocol::C_TO_S_ENTER_ROOM tBody{};
+		memcpy(&tBody, tEvent.Get_Body(), sizeof(tBody));
+
+		/* 로그인했고 로비에 있는 사람만 */
+		const CPlayer* pPlayer = m_pPlayerManager->Find_Player(tEvent.iKey);
+		if (pPlayer == nullptr || pPlayer->Get_State() != Protocol::PLAYER_STATE::LOBBY) return;
+
+		/* TODO: 실패 이유 패킷 (꽉 참 / 게임 중 / 없는 방). 지금은 응답 없음 → 클라는 시간 초과로 로비 */
+		if (m_pRoomManager->Enter_Room(tBody.iRoomKey, tEvent.iKey) != CRoom::ENTER_RESULT::OK) return;
+
+		m_pPlayerManager->Set_PlayerState(tEvent.iKey, Protocol::PLAYER_STATE::ROOM);
+		Send_EnterRoom(tEvent.iKey, tBody.iRoomKey);					/* 들어온 사람 : 방 전체 정보 */
+		Broadcast_RoomMembers(tBody.iRoomKey, tEvent.iKey);			/* 원래 있던 사람들 : 바뀐 자리 */
+		m_pMainServer->Add_CustomLog(tEvent.iKey, L"방 입장 (#" + std::to_wstring(tBody.iRoomKey) + L")");
+		m_isDirty = true;
+	}
+
+	void CServerApp::Fill_Seats(const CRoom* pRoom, Protocol::ROOM_SEAT (&arrSeats)[Protocol::MAX_ROOM_PLAYER])
+	{
+		/* 자리 순서 그대로 (빈자리는 iKey 0) */
+		const auto& arrKeys = pRoom->Get_PlayerKeys();
+		for (size_t i = 0; i < arrKeys.size(); ++i)
+		{
+			arrSeats[i] = {};
+			const CPlayer* pSeat = m_pPlayerManager->Find_Player(arrKeys[i]);
+			if (pSeat == nullptr) continue;
+			arrSeats[i].iKey = arrKeys[i];
+			wcsncpy_s(arrSeats[i].wszNickname, pSeat->Get_Nickname().c_str(), _TRUNCATE);
+		}
+	}
+
+	void CServerApp::Send_EnterRoom(Net::ClientKey iClientKey, Protocol::ROOM_KEY iRoomKey)
+	{
+		const CRoom* pRoom = m_pRoomManager->Find_Room(iRoomKey);
+		if (pRoom == nullptr) return;
+
+		Protocol::S_TO_C_ENTER_ROOM tBody{};
+		tBody.iRoomKey	 = iRoomKey;
+		tBody.iMasterKey = pRoom->Get_MasterKey();
+		wcsncpy_s(tBody.wszRoomName, pRoom->Get_Name(), _TRUNCATE);
+		Fill_Seats(pRoom, tBody.arrSeats);
+		m_pMainServer->Send_Packet(iClientKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_ENTER_ROOM), tBody);
+	}
+
+	void CServerApp::Broadcast_RoomMembers(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iExceptKey)
+	{
+		const CRoom* pRoom = m_pRoomManager->Find_Room(iRoomKey);
+		if (pRoom == nullptr) return;		/* 마지막 사람이 나가 방이 지워졌으면 알릴 사람도 없음 */
+
+		Protocol::S_TO_C_ROOM_MEMBERS tBody{};
+		tBody.iMasterKey = pRoom->Get_MasterKey();
+		Fill_Seats(pRoom, tBody.arrSeats);
+
+		for (Net::ClientKey iKey : pRoom->Get_PlayerKeys())
+		{
+			if (iKey == Net::NONE_CLIENTKEY || iKey == iExceptKey) continue;
+			m_pMainServer->Send_Packet(iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_ROOM_MEMBERS), tBody);
+		}
+	}
+
+	void CServerApp::Leave_Room(Net::ClientKey iClientKey)
+	{
+		const Protocol::ROOM_KEY iRoomKey = m_pRoomManager->Exit_Room(iClientKey);
+		if (iRoomKey == 0) return;		/* 방에 없었음 */
+
+		m_pPlayerManager->Set_PlayerState(iClientKey, Protocol::PLAYER_STATE::LOBBY);
+
+		Broadcast_RoomMembers(iRoomKey, Net::NONE_CLIENTKEY);		/* 남은 사람들에게 (나간 사람은 이미 빠짐) */
+		m_pMainServer->Add_CustomLog(iClientKey, L"방 나감 (#" + std::to_wstring(iRoomKey) + L")");
+		m_isDirty = true;
+	}
+
 	void CServerApp::Handle_RequestData(const Net::Event& tEvent)
 	{
-
 		uint16_t iLen = tEvent.Get_BodyLen();
 		if (iLen != sizeof(Protocol::REQ_DATA)) return;
 		Net::Packet<Protocol::REQ_DATA> tPacket{};
 		memcpy(&tPacket.tData, tEvent.Get_Body(), sizeof(Protocol::REQ_DATA));
 
-		/* 플레이어 목록 요청 */
-		if (tPacket.tData.eDataType == Protocol::DATA_TYPE::PLAYER_INFOS)
+		/* 로비 접속자 목록 요청 : 서버 CPlayer에서 로비에 필요한 것(키, 닉네임, 상태)만 골라 담음 */
+		if (tPacket.tData.eDataType == Protocol::DATA_TYPE::LOBBY_PLAYERS)
 		{
-			std::vector<Protocol::PlayerInfo> vec = std::move(m_pPlayerManager->Get_PlayerInfos());
-			size_t iPre{ 0 };
-			/* 최대값을 나눠서 진행 */
-			while (iPre < vec.size())
+			Protocol::LOBBY_PLAYERS tBody{};
+			tBody.eDataType = Protocol::DATA_TYPE::LOBBY_PLAYERS;
+
+			for (const auto& Pair : m_pPlayerManager->Get_Players())
 			{
-				/* Info 복사 */
-				Protocol::PLAYER_INFOS tBody{};
-				tBody.eDataType = Protocol::DATA_TYPE::PLAYER_INFOS;
-				tBody.iCount = static_cast<uint16_t>((std::min)(vec.size() - iPre, Protocol::MAX_ONLINE_PLAYER));
-				memcpy(tBody.arr , vec.data() + iPre , tBody.iCount * sizeof(Protocol::PlayerInfo));
-				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tBody);
-				iPre += tBody.iCount;
+				const CPlayer* pPlayer = Pair.second.get();
+				Protocol::LOBBY_PLAYER& tRow = tBody.arr[tBody.iCount++];
+				tRow.iKey	= pPlayer->Get_Key();
+				tRow.eState	= static_cast<uint8_t>(pPlayer->Get_State());
+				wcsncpy_s(tRow.wszNickname, pPlayer->Get_Nickname().c_str(), _TRUNCATE);
+
+				/* 한 패킷이 꽉 차면 보내고 다시 채움 */
+				if (tBody.iCount == Protocol::MAX_ONLINE_PLAYER)
+				{
+					m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA), tBody);
+					tBody.iCount = 0;
+				}
 			}
+			if (tBody.iCount > 0)
+				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA), tBody);
+		}
+
+		if (tPacket.tData.eDataType == Protocol::DATA_TYPE::LOBBY_ROOMS)
+		{
+			Protocol::LOBBY_ROOMS tBody{};
+			tBody.eDataType = Protocol::DATA_TYPE::LOBBY_ROOMS;
+
+			const auto& Rooms = m_pRoomManager->Get_Rooms();
+			for (const auto& Pair : Rooms)
+			{
+				const CRoom* pRoom = Pair.second.get();
+				if (pRoom == nullptr) continue;
+				auto& CurBody = tBody.arr[tBody.iCount++];
+				CurBody.isPlaying = pRoom->Get_IsPlaying();
+				CurBody.iPlayerNumber = pRoom->Get_CurPlayerNum();
+				CurBody.iRoomKey = pRoom->Get_Key();
+				wcsncpy_s(CurBody.wszRoomName, pRoom->Get_Name(), Protocol::MAX_ROOMNAME_BUF);
+
+				/* 한 패킷이 꽉 차면 보내고 다시 채움 */
+				if (tBody.iCount == Protocol::MAX_ROOM_PACKET_COUNT)
+				{
+					m_pMainServer->
+						Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA), tBody);
+					tBody.iCount = 0;
+				}
+			}
+			if(tBody.iCount > 0)
+				m_pMainServer->Send_Packet(tEvent.iKey, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA), tBody);
 		}
 	}
 }

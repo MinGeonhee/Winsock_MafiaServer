@@ -4,12 +4,12 @@
 
 namespace MafiaClient
 {
-	class CGame : public CScene
+	class CScene_Game : public CScene
 	{
 	protected:
-		CGame();
+		CScene_Game();
 	public:
-		virtual ~CGame();
+		virtual ~CScene_Game();
 	protected:
 		HRESULT	Initialize() override;
 		void	Register_NetEventCallBack() override;
@@ -21,7 +21,7 @@ namespace MafiaClient
 		void Late_Update() override;
 		void Render() override;
 	public:
-		static std::unique_ptr<CGame> Create();
+		static std::unique_ptr<CScene_Game> Create();
 	private:
 		bool	m_isDirty;
 	};
