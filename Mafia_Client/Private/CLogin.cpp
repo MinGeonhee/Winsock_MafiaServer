@@ -41,6 +41,9 @@ namespace MafiaClient
 		/* 연결이 없으면(끊김) App이 CONNECT로 보내므로 여기서는 아무것도 안 함 */
 		if (m_pClientApp->Get_Client() == nullptr) return;
 
+		
+
+
 		switch (m_eStep)
 		{
 		case STEP::INPUT:		Do_Input();	break;		/* 이 단계만 블로킹 (입력 화면이라 괜찮음) */

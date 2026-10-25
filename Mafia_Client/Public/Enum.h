@@ -3,6 +3,9 @@
 
 namespace MafiaClient
 {
+	constexpr size_t iLobbyListUpdateSecond = 10;
+
+
 	enum class SCENE
 	{
 		INTRO = 0,

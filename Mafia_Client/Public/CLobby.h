@@ -31,5 +31,6 @@ namespace MafiaClient
 		std::vector<Protocol::PlayerInfo>	m_vecPlayerInfos;
 		ConsoleUI::LobbyView				m_tView;			/* 화면에 그릴 로비 정보 (서버 데이터 오면 여기 채움) */
 		bool								m_isDirty;
+		ULONGLONG							m_ullLastRequest{ 0 };	/* 마지막으로 목록을 요청한 시각 (iLobbyListUpdateSecond마다 다시 요청) */
 	};
 }

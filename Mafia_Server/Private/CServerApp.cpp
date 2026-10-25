@@ -148,9 +148,12 @@ namespace MafiaServer
 
 				if (m_pPlayerManager->LogIn_Player(tEvent.iKey, tPacket.tData.wszNicName) == false) break;
 
-				/* 서버 로그 : 접속(Accept)과 따로 실제 로그인 시점 */
+				/* 로그인 했을시 클라이언트 로그인 목록 업데이트 */
+
+
 				m_pMainServer->Add_CustomLog(tEvent.iKey, std::wstring(L"로그인 (") + tPacket.tData.wszNicName + L")");
 				m_isDirty = true;
+
 				break;
 			}
 			case Protocol::CHECK_NAME::EMPTY:

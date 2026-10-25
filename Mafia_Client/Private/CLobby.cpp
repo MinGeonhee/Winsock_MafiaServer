@@ -89,6 +89,10 @@ namespace MafiaClient
 			m_tView.iMyKey = iKey;
 			m_isDirty = true;
 		}
+
+		/* 접속자 목록 주기적 요청 (폴링) : 마지막 요청(Enter / R / 자동) 후 일정 시간이 지나면 다시 요청 */
+		if (GetTickCount64() - m_ullLastRequest >= iLobbyListUpdateSecond * 1000)
+			Request_PlayerInfos();
 	}
 
 	void CLobby::Late_Update()
@@ -133,13 +137,13 @@ namespace MafiaClient
 		}
 		default:	break;
 		}
-
 	}
 
 	void CLobby::Request_PlayerInfos()
 	{
 		if (m_pClientApp->Get_Client() == nullptr) return;
 
+		m_ullLastRequest = GetTickCount64();	/* 여기서 기록 → 자동 · 수동(R) 어느 쪽이든 그 시점부터 다시 셈 */
 		m_vecPlayerInfos.clear();		/* 새 목록을 받을 거라 비움 (안 비우면 새로고침마다 같은 사람이 쌓임) */
 
 		Protocol::REQ_DATA tPacket{};
