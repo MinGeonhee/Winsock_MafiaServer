@@ -1,12 +1,13 @@
 ﻿#include "pch.h"
 #include "CRoom.h"
 #include "CServerApp.h"
+#include "CChatting.h"
 
 namespace MafiaServer
 {
 	CRoom::CRoom()
 		: m_iRoomKey{}, m_arrayPlayerClientKeys{}, m_iRoomMasterClientKey{}, m_eCurState{CRoom::STATE::WATING}
-		, m_pServerApp{nullptr}, m_iCurPlayerNum{}
+		, m_pServerApp{nullptr}, m_iCurPlayerNum{} , m_pChatting{nullptr},m_wszRoomName{}
 	{
 
 	}
@@ -46,6 +47,7 @@ namespace MafiaServer
 
 		m_iCurPlayerNum++;
 
+
 		return CRoom::ENTER_RESULT::OK;
 	}
 
@@ -68,6 +70,31 @@ namespace MafiaServer
 
 		if (iExitPlayerClientKey == m_iRoomMasterClientKey)
 			Change_Master();
+	}
+
+	void CRoom::Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText,Net::CServer* pMainServer)
+	{
+		/* 현재 방안에 해당 Key의 인원이 있는지 확인 */
+		if (pMainServer == nullptr) return;
+		if (Has_Player(iChatterKey) == false) return;
+		const CPlayer* pPlayer = m_pServerApp->Get_PlayerManager()->Find_Player(iChatterKey);
+		if (pPlayer == nullptr) return;
+		if (m_pChatting == nullptr) return;
+
+		m_pChatting->Chatting(tTime,iChatterKey,wstrText);
+		/* 추후 채팅을 실패했을 경우에 실패 메세지 따로 첨부 */
+
+
+		/* 모든 인원한테 채팅 발송하기 */
+		Protocol::CHAT_LOG tChat{};
+		tChat.eDataType = Protocol::DATA_TYPE::CHAT_LOG;
+		tChat.tTime = tTime;
+		wcsncpy_s(tChat.wszName, pPlayer->Get_Nickname().c_str(), _TRUNCATE);
+		wcsncpy_s(tChat.wszText, wstrText.c_str(), _TRUNCATE);
+
+		/* 발송 */
+		for (auto Key : m_arrayPlayerClientKeys)
+			pMainServer->Send_Packet(Key, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tChat);
 	}
 
 	void CRoom::Change_Master()
@@ -97,6 +124,12 @@ namespace MafiaServer
 		wcsncpy_s(m_wszRoomName, tData.wstrRoomName.c_str(), _TRUNCATE);	/* 길면 잘라냄 (개수를 넘기면 길 때 프로그램이 죽음) */
 	
 		m_iCurPlayerNum = 1;
+
+
+		CChatting::Init_Data tChatting_InitData{};
+		tChatting_InitData.iMaxChatLen		 = 100;
+		tChatting_InitData.iSaveChattingSize = 100;
+		m_pChatting = std::move(CChatting::Create(tChatting_InitData));
 
 		return S_OK;
 	}

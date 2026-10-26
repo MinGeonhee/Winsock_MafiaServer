@@ -21,17 +21,21 @@ namespace MafiaServer
 	private:
 		HRESULT	Initialize(uint64_t iKey, const std::wstring& strNickname);
 	public:
-		uint64_t				Get_Key() const			{ return m_iKey; }
-		const std::wstring&		Get_Nickname() const	{ return m_strNickname; }
-		Protocol::PLAYER_STATE	Get_State() const		{ return m_eState; }
-		const PlayerRecord&		Get_Record() const		{ return m_tRecord; }
+		Net::ClientKey			Get_ClientKey() const	{ return m_iClientKey; }
+		Protocol::ROOM_KEY		Get_RoomKey()	const	{ return m_iRoomKey; }		/* 0 = 방에 없음 */
+		const std::wstring&		Get_Nickname()	const	{ return m_strNickname; }
+		Protocol::PLAYER_STATE	Get_State()		const	{ return m_eState; }
+		const PlayerRecord&		Get_Record()	const	{ return m_tRecord; }
 
 		void					Set_State(Protocol::PLAYER_STATE eState) { m_eState = eState; }
+		void					Set_RoomKey(Protocol::ROOM_KEY iRoomKey) { m_iRoomKey = iRoomKey; }
 		void					Add_Result(bool isWin);
 	public:
 		static std::unique_ptr<CPlayer>	Create(uint64_t iKey, const std::wstring& strNickname);
 	private:
-		uint64_t				m_iKey;
+		Net::ClientKey			m_iClientKey{};		/* 연결 키 = 플레이어 키 */
+		Protocol::ROOM_KEY		m_iRoomKey{};		/* 들어가 있는 방 (0 = 로비) */
+
 		std::wstring			m_strNickname;
 		Protocol::PLAYER_STATE	m_eState;
 		PlayerRecord			m_tRecord;

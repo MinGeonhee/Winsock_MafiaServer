@@ -4,7 +4,7 @@
 namespace MafiaServer
 {
 	CPlayer::CPlayer()
-		: m_iKey{ 0 }, m_strNickname{}, m_eState{ Protocol::PLAYER_STATE::LOBBY }, m_tRecord{}
+		: m_iClientKey{ Net::NONE_CLIENTKEY }, m_iRoomKey{ 0 }, m_strNickname{}, m_eState{ Protocol::PLAYER_STATE::LOBBY }, m_tRecord{}
 	{
 	}
 
@@ -16,7 +16,7 @@ namespace MafiaServer
 	{
 		if (iKey == 0 || strNickname.empty()) return E_FAIL;
 
-		m_iKey = iKey;
+		m_iClientKey = iKey;
 		m_strNickname = strNickname;
 		m_eState = Protocol::PLAYER_STATE::LOBBY;
 

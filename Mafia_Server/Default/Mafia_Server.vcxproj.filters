@@ -43,6 +43,12 @@
     <Filter Include="소스 파일\01. Core\01. Room">
       <UniqueIdentifier>{173b5904-310d-40b4-8b54-364d3ca3675d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\01. Core\02. Chat">
+      <UniqueIdentifier>{f9d52b0c-3040-4104-ad0f-886edba924d8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\01. Core\03. Chatting">
+      <UniqueIdentifier>{906d78ac-1bf1-45fb-9c54-1e839aa1565e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Private\pch.cpp">
@@ -69,6 +75,12 @@
     <ClCompile Include="..\Private\CRoom.cpp">
       <Filter>소스 파일\01. Core\01. Room</Filter>
     </ClCompile>
+    <ClCompile Include="..\Private\CChat.cpp">
+      <Filter>소스 파일\01. Core\02. Chat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Private\CChatting.cpp">
+      <Filter>소스 파일\01. Core\03. Chatting</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\pch.h">
@@ -94,6 +106,12 @@
     </ClInclude>
     <ClInclude Include="..\Public\CPlayerManager.h">
       <Filter>소스 파일\02. Logic\01. PlayerManager</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CChat.h">
+      <Filter>소스 파일\01. Core\02. Chat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CChatting.h">
+      <Filter>소스 파일\01. Core\03. Chatting</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

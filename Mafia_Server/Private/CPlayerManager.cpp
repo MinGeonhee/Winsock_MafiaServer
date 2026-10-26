@@ -13,7 +13,7 @@ namespace  MafiaServer
 	{
 		if (pAddPlayer == nullptr) return false;
 
-		uint64_t iClientKey = pAddPlayer->Get_Key();
+		uint64_t iClientKey = pAddPlayer->Get_ClientKey();
 		auto iter = m_umapPlayers.find(iClientKey);
 		if (iter != m_umapPlayers.end()) return false;
 
@@ -34,6 +34,16 @@ namespace  MafiaServer
 		if (iter == m_umapPlayers.end()) return false;
 		m_umapPlayers.erase(iter);
 
+		return true;
+	}
+
+	bool CPlayerManager::Set_PlayerRoom(uint64_t iKey, Protocol::ROOM_KEY iRoomKey)
+	{
+		auto iter = m_umapPlayers.find(iKey);
+		if (iter == m_umapPlayers.end()) return false;
+
+		iter->second->Set_RoomKey(iRoomKey);
+		iter->second->Set_State(iRoomKey != 0 ? Protocol::PLAYER_STATE::ROOM : Protocol::PLAYER_STATE::LOBBY);
 		return true;
 	}
 

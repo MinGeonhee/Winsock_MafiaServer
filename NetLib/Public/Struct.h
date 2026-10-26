@@ -74,7 +74,6 @@ namespace Net
 		memcpy(&tHeader, vecPacket.data(), sizeof(PacketHeader));
 		return tHeader.Is_NetPacket();
 	}
-
 	/* 헤더 + 본문을 이어 붙인 보낼 바이트 만들기 (본문이 너무 크면 빈 vector) */
 	inline std::vector<char> Make_PacketBytes(uint8_t isNet,uint16_t usType, const void* pBody, uint16_t usLen)
 	{

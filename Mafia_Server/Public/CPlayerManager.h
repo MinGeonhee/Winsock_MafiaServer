@@ -40,6 +40,8 @@ namespace MafiaServer
 
 		/* 플레이어 상태 바꾸기 (로비 ↔ 방 ↔ 게임). 없는 키면 false */
 		bool			Set_PlayerState(uint64_t iKey, Protocol::PLAYER_STATE eState);
+		/* 방 들어감 / 나옴 : 방 키와 상태를 같이 바꿈 (iRoomKey 0 = 로비로). 둘이 어긋나지 않게 이 함수로만 */
+		bool			Set_PlayerRoom(uint64_t iKey, Protocol::ROOM_KEY iRoomKey);
 	private:
 		inline static CPlayerManager* m_pInstance{ nullptr };
 	private:

@@ -1,7 +1,14 @@
 ﻿#pragma once
 
+namespace Net
+{
+	class CServer;
+}
+
+
 namespace MafiaServer
 {
+	class CChatting;
 	class CServerApp;
 
 	class CRoom
@@ -23,14 +30,12 @@ namespace MafiaServer
 			ID_ERROR,
 			END,
 		};
-
 		struct Init_Data
 		{
 			Protocol::ROOM_KEY iRoomKey{};				//Room Key
 			Net::ClientKey     iRoomMasterClientKey{};	// Room Master Client Key
 			std::wstring	   wstrRoomName{};			//Room Name;
 		};
-
 	private:
 		CRoom();
 		HRESULT Initialize(const Init_Data& tData);
@@ -52,6 +57,10 @@ namespace MafiaServer
 		/* 방 참여 신청 받기 */
 		ENTER_RESULT	Enter(Net::ClientKey iEnterPlayerClientKey);
 		void			Exit(Net::ClientKey iExitPlayerClientKey);
+
+		/* 채팅 관련 */
+		void			Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServere);
+
 	private:
 		void			Change_Master();
 	public:
@@ -65,6 +74,7 @@ namespace MafiaServer
 
 		uint16_t			m_iCurPlayerNum;
 		std::array< Net::ClientKey , Protocol::MAX_ROOM_PLAYER > m_arrayPlayerClientKeys;
+		std::unique_ptr<CChatting>	m_pChatting;
 	};
 }
 

@@ -60,12 +60,17 @@ namespace MafiaClient
 			switch (ConsoleUI::Edit_Line(m_tView.strInput, tKey, MAX_CHAT_LEN))
 			{
 			case ConsoleUI::LINE_INPUT::SUBMIT:
+			{
+				/* 빈 Text가 가지 못하도록 체크 */
 				if (m_tView.strInput.empty()) break;
-				/* TODO: 채팅 패킷으로 보내기. 지금은 내 화면에만 */
-				m_tView.vecChats.push_back({ m_pClientApp->Get_Nickname(), m_tView.strInput, true, false });
+
+				Protocol::C_TO_S_CHAT tBody{};
+				tBody.iRoomKey  = m_tRoomInfo.iRoomKey;
+				wcsncpy_s(tBody.wszText, m_tView.strInput.c_str(), _TRUNCATE);
+				m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_CHAT),tBody);
 				m_tView.strInput.clear();
-				m_isDirty = true;
 				break;
+			}
 			case ConsoleUI::LINE_INPUT::CHANGED:
 				m_isDirty = true;
 				break;
@@ -167,6 +172,25 @@ namespace MafiaClient
 			Apply_RoomInfo();
 			break;
 		}
+		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:
+		{
+			const Protocol::PROVIDE_DATA* pData = reinterpret_cast<const Protocol::PROVIDE_DATA*>(tEvent.Get_Body());
+			if (pData == nullptr) break;
+			
+			if (pData->eDataType == Protocol::DATA_TYPE::CHAT_LOG)
+			{
+				Protocol::CHAT_LOG tChat{};
+				memcpy(&tChat, tEvent.Get_Body() , sizeof(tChat));                   // 복사본에서
+				tChat.wszName[Protocol::MAX_NICNAME_BUF - 1] = L'\0';                // 끝 막기
+				tChat.wszText[Protocol::MAX_CHAT_BUF - 1] = L'\0';
+
+				m_tView.vecChats.push_back({ tChat.wszName, tChat.wszText, false , false });
+				m_isDirty = true;
+			}
+
+			break;
+		}
+
 		default: break;
 		}
 	}

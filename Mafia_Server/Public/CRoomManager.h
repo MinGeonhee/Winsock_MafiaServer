@@ -33,6 +33,7 @@ namespace MafiaServer
 		CRoom::ENTER_RESULT Enter_Room( Protocol::ROOM_KEY iEnterRoomKey  ,Net::ClientKey iEnterPlayerClientKey );
 		/* 이 사람이 있는 방에서 빼기 (비면 방 삭제). 반환 : 나간 방 키 (방에 없었으면 0) */
 		Protocol::ROOM_KEY	Exit_Room(Net::ClientKey iExitPlayerClientKey);
+		void				Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer);
 	private:
 		inline static CRoomManager* m_pInstance{ nullptr };
 	private:

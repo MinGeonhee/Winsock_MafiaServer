@@ -71,4 +71,10 @@ namespace MafiaServer
 		}
 		return 0;
 	}
+	void CRoomManager::Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer)
+	{
+		if (Find_Room(iRoomKey) == nullptr) return;
+		
+		m_umapRooms[iRoomKey]->Chatting(tTime,iChatterKey,wstrText,pMainServer);
+	}
 }

@@ -57,9 +57,9 @@ namespace MafiaServer
 		void	Handle_CreateRoom(const Net::Event& tEvent);
 		void	Handle_EnterRoom(const Net::Event& tEvent);
 		void	Fill_Seats(const CRoom* pRoom, Protocol::ROOM_SEAT (&arrSeats)[Protocol::MAX_ROOM_PLAYER]);	/* 자리 7칸 채우기 (입장 / 자리 변경 공용) */
-		void	Send_EnterRoom(Net::ClientKey iClientKey, Protocol::ROOM_KEY iRoomKey);	/* 방 정보 + 자리 7칸 보내기 */
-		void	Broadcast_RoomMembers(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iExceptKey);	/* 방 사람들에게 바뀐 자리 알리기 */
-		void	Leave_Room(Net::ClientKey iClientKey);									/* Esc / 끊김 공용 */
+		void	Send_EnterRoom(Net::ClientKey iClientKey, Protocol::ROOM_KEY iRoomKey);						/* 방 정보 + 자리 7칸 보내기 */
+		void	Broadcast_RoomMembers(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iExceptKey);				/* 방 사람들에게 바뀐 자리 알리기 */
+		void	Leave_Room(Net::ClientKey iClientKey);														/* Esc / 끊김 공용 */
 	/* Mangaer 링크 */
 	public:
 		CPlayerManager* Get_PlayerManager() { return m_pPlayerManager; }

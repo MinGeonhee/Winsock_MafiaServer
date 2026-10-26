@@ -4,7 +4,8 @@
 
 namespace Protocol
 {
-	using ROOM_KEY = uint64_t;
+	using		ROOM_KEY = uint64_t;
+	constexpr	ROOM_KEY NONE_ROOMKEY = 0;
 
 	/* 닉네임 제한 길이 10글자 */
 	constexpr size_t MAX_NICKNAME_LEN  = 10;
@@ -17,6 +18,10 @@ namespace Protocol
 	constexpr uint16_t MAX_ROOM_PLAYER	= 7;
 
 	constexpr uint16_t MAX_ROOM_PACKET_COUNT = 10;
+
+	/* 채팅 제한 */
+	constexpr uint16_t MAX_CHAT_LEN = 100;
+	constexpr uint16_t MAX_CHAT_BUF = 128;
 
 
 	enum class CHECK_NAME : uint16_t
@@ -50,6 +55,7 @@ namespace Protocol
 		C_TO_S_EXIT_ROOM,			// 방 나가기   요청 (본문 없음)
 		S_TO_C_ENTER_ROOM,			// 방 입장 성공 (방을 만든 사람도 이걸 받음)
 		S_TO_C_ROOM_MEMBERS,		// 방 자리 바뀜 (누가 들어오거나 나감) → 방에 남은 사람 전원에게
+		C_TO_S_CHAT,				// 클라->서버 채팅 보내기
 		END
 	};
 
@@ -57,6 +63,7 @@ namespace Protocol
 	{
 		LOBBY_PLAYERS = 0,		// 로비 접속자 목록
 		LOBBY_ROOMS   = 1,		// 로비 방 목록
+		CHAT_LOG	  = 1,		// 로비 방 목록
 		END
 	};
 

@@ -62,7 +62,6 @@ namespace Protocol
 		wchar_t			wszNickname[Protocol::MAX_NICNAME_BUF]{};
 		uint8_t			eState{ 0 };
 	};
-
 	
 	/* 로비 룸 */
 	struct LOBBY_ROOM
@@ -71,6 +70,13 @@ namespace Protocol
 		uint16_t iPlayerNumber{};							// 해당 룸안에 플레이어 숫자
 		bool	 isPlaying{false};							// 게임 중인지 아닌지
 		wchar_t	 wszRoomName[Protocol::MAX_ROOMNAME_BUF]{};	// 룸 이름
+	};
+
+
+	struct C_TO_S_CHAT
+	{
+		ROOM_KEY	iRoomKey{ Protocol::NONE_ROOMKEY };
+		wchar_t		wszText[MAX_CHAT_BUF]{};	/* 채팅 내용 */
 	};
 
 	struct REQ_DATA
@@ -95,6 +101,13 @@ namespace Protocol
 		LOBBY_ROOM		arr[MAX_ROOM_PACKET_COUNT]{};
 	};
 
+	/* 채팅 로그 보내기 */
+	struct CHAT_LOG : PROVIDE_DATA
+	{
+		SYSTEMTIME	tTime{};					/* 시간 */
+		wchar_t		wszName[MAX_NICNAME_BUF];	/* 보낸 사람 닉네임 */
+		wchar_t		wszText[MAX_CHAT_BUF]{};	/* 채팅 내용 */
+	};
 
 #pragma pack(pop)
 

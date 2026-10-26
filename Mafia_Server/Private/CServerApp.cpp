@@ -175,6 +175,19 @@ namespace MafiaServer
 			}
 			break;
 		}
+		case Protocol::PACKET_TYPE::C_TO_S_CHAT:
+		{
+			if (tEvent.Is_NetPacket()) return;
+			uint16_t iLen = tEvent.Get_BodyLen();
+			if (iLen != sizeof(Protocol::C_TO_S_CHAT)) break;
+			Net::Packet<Protocol::C_TO_S_CHAT> tPacket{};
+			memcpy(&tPacket.tData, tEvent.Get_Body(), iLen);
+
+			SYSTEMTIME tTime{};
+			GetLocalTime(&tTime);
+			m_pRoomManager->Chatting(tPacket.tData.iRoomKey, tTime, tEvent.iKey, tPacket.tData.wszText, m_pMainServer.get());
+			break;
+		}
 		case Protocol::PACKET_TYPE::C_TO_S_REQ_DATA:
 		{
 			Handle_RequestData(tEvent);
@@ -236,7 +249,7 @@ namespace MafiaServer
 		const Protocol::ROOM_KEY iRoomKey = m_pRoomManager->Create_Room(tBody.wszRoomName, tEvent.iKey);
 		if (iRoomKey == 0) return;
 
-		m_pPlayerManager->Set_PlayerState(tEvent.iKey, Protocol::PLAYER_STATE::ROOM);
+		m_pPlayerManager->Set_PlayerRoom(tEvent.iKey, iRoomKey);
 		Send_EnterRoom(tEvent.iKey, iRoomKey);
 		m_pMainServer->Add_CustomLog(tEvent.iKey, L"방 생성 (#" + std::to_wstring(iRoomKey) + L" " + tBody.wszRoomName + L")");
 		m_isDirty = true;
@@ -255,7 +268,7 @@ namespace MafiaServer
 		/* TODO: 실패 이유 패킷 (꽉 참 / 게임 중 / 없는 방). 지금은 응답 없음 → 클라는 시간 초과로 로비 */
 		if (m_pRoomManager->Enter_Room(tBody.iRoomKey, tEvent.iKey) != CRoom::ENTER_RESULT::OK) return;
 
-		m_pPlayerManager->Set_PlayerState(tEvent.iKey, Protocol::PLAYER_STATE::ROOM);
+		m_pPlayerManager->Set_PlayerRoom(tEvent.iKey, tBody.iRoomKey);
 		Send_EnterRoom(tEvent.iKey, tBody.iRoomKey);					/* 들어온 사람 : 방 전체 정보 */
 		Broadcast_RoomMembers(tBody.iRoomKey, tEvent.iKey);			/* 원래 있던 사람들 : 바뀐 자리 */
 		m_pMainServer->Add_CustomLog(tEvent.iKey, L"방 입장 (#" + std::to_wstring(tBody.iRoomKey) + L")");
@@ -310,7 +323,7 @@ namespace MafiaServer
 		const Protocol::ROOM_KEY iRoomKey = m_pRoomManager->Exit_Room(iClientKey);
 		if (iRoomKey == 0) return;		/* 방에 없었음 */
 
-		m_pPlayerManager->Set_PlayerState(iClientKey, Protocol::PLAYER_STATE::LOBBY);
+		m_pPlayerManager->Set_PlayerRoom(iClientKey, 0);
 
 		Broadcast_RoomMembers(iRoomKey, Net::NONE_CLIENTKEY);		/* 남은 사람들에게 (나간 사람은 이미 빠짐) */
 		m_pMainServer->Add_CustomLog(iClientKey, L"방 나감 (#" + std::to_wstring(iRoomKey) + L")");
@@ -334,7 +347,7 @@ namespace MafiaServer
 			{
 				const CPlayer* pPlayer = Pair.second.get();
 				Protocol::LOBBY_PLAYER& tRow = tBody.arr[tBody.iCount++];
-				tRow.iKey	= pPlayer->Get_Key();
+				tRow.iKey	= pPlayer->Get_ClientKey();
 				tRow.eState	= static_cast<uint8_t>(pPlayer->Get_State());
 				wcsncpy_s(tRow.wszNickname, pPlayer->Get_Nickname().c_str(), _TRUNCATE);
 
