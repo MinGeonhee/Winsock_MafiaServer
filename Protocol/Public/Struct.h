@@ -55,6 +55,17 @@ namespace Protocol
 		ROOM_SEAT	arrSeats[Protocol::MAX_ROOM_PLAYER]{};
 	};
 
+	struct C_TO_S_STARTGAME
+	{
+		Protocol::ROOM_KEY iRoomKey;
+	};
+
+	struct S_TO_C_STARTGAME
+	{
+		/* 게임 시작 실패 이유 Text로 넣어서 보내줄 예정 */
+		STARTGAME_RESULT	eResult{ STARTGAME_RESULT::END};
+	};
+
 	/* 로비 접속자 */
 	struct LOBBY_PLAYER
 	{

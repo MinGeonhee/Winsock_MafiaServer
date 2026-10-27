@@ -133,6 +133,7 @@
   <ItemGroup>
     <ClCompile Include="..\Private\CChat.cpp" />
     <ClCompile Include="..\Private\CChatting.cpp" />
+    <ClCompile Include="..\Private\CMafiaLogic.cpp" />
     <ClCompile Include="..\Private\CPlayer.cpp" />
     <ClCompile Include="..\Private\CPlayerManager.cpp" />
     <ClCompile Include="..\Private\CRoom.cpp" />
@@ -149,6 +150,7 @@
     <ClInclude Include="..\..\ConsoleUI\ConsoleUI.h" />
     <ClInclude Include="..\Public\CChat.h" />
     <ClInclude Include="..\Public\CChatting.h" />
+    <ClInclude Include="..\Public\CMafiaLogic.h" />
     <ClInclude Include="..\Public\CPlayer.h" />
     <ClInclude Include="..\Public\CPlayerManager.h" />
     <ClInclude Include="..\Public\CRoom.h" />

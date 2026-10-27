@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CRoom.h"
 
 namespace MafiaServer
@@ -34,6 +34,13 @@ namespace MafiaServer
 		/* 이 사람이 있는 방에서 빼기 (비면 방 삭제). 반환 : 나간 방 키 (방에 없었으면 0) */
 		Protocol::ROOM_KEY	Exit_Room(Net::ClientKey iExitPlayerClientKey);
 		void				Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer);
+
+		/* 게임 시작 승인된 방 : 로딩(카운트다운) 시작 */
+		bool				Start_Loading(Protocol::ROOM_KEY iRoomKey, ULONGLONG ullNow);
+
+		/* 매 프레임 : Pre_Update / Update 둘 다 같은 이번 프레임 시각을 모든 방에 전달 (도는 중에 방을 지우지 않음) */
+		void				Pre_Update(ULONGLONG ullNow);
+		void				Update(ULONGLONG ullNow);
 	private:
 		inline static CRoomManager* m_pInstance{ nullptr };
 	private:

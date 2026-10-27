@@ -856,6 +856,7 @@ namespace ConsoleUI
 		std::wstring			strSub;				// "0 : 25", "마피아가 고르는 중" 등
 		std::vector<ChatView>	vecChats;			// 오래된 것 → 최근. 화면에 들어가는 만큼 끝에서부터 그림
 		std::wstring			strInput;			// 입력 중인 채팅
+		std::wstring			strNotice;			// 안내 줄 오른쪽 빨간 알림 ("인원이 부족합니다" 등, 비면 없음)
 	};
 
 	/* 한 줄 입력 (막지 않음) : Scene이 Poll_Keys(true)로 받은 키를 하나씩 넘김
@@ -1114,6 +1115,7 @@ namespace ConsoleUI
 		str += Yellow; str += L"[Enter]"; str += Reset; str += L" 보내기   ";
 		if (tView.isMaster && !tView.isPlaying) { str += Yellow; str += L"[F5]"; str += Reset; str += L" 게임 시작   "; }
 		str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기";
+		if (!tView.strNotice.empty()) { str += L"      "; str += Red; str += Bold; str += L"! "; str += tView.strNotice; str += Reset; }
 		str += L"\x1b[K\x1b[J";
 
 		/* (숨긴) 진짜 커서를 입력 글자 끝으로 → 한글 IME 조합 글자가 입력 줄에 뜸

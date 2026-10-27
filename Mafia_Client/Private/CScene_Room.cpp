@@ -53,7 +53,14 @@ namespace MafiaClient
 			}
 			if (tKey.wVirtualKeyCode == VK_F5)
 			{
-				/* TODO: 방장이면 게임 시작 요청 */
+				/* TODO: 방장이면 게임 시작 요청 보내기 */
+				if (m_tRoomInfo.iMasterKey != m_pClientApp->Get_Client()->Get_ClientKey()) continue;
+				if (m_ullStartAt != 0 || m_tView.isPlaying) continue;		/* 카운트다운 중 / 게임 중엔 무시 */
+
+				Protocol::C_TO_S_STARTGAME tBody{};
+				tBody.iRoomKey = this->m_tRoomInfo.iRoomKey;
+				m_pClientApp->Get_Client()->Send_Packet( static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_STARTGAME), tBody);
+
 				continue;
 			}
 
@@ -111,6 +118,42 @@ namespace MafiaClient
 
 	void CScene_Room::Update()
 	{
+		/* 알림 시간이 지나면 지움 */
+		if (!m_tView.strNotice.empty() && GetTickCount64() >= m_ullNoticeEnd)
+		{
+			m_tView.strNotice.clear();
+			m_isDirty = true;
+		}
+
+		/* 게임 시작 카운트다운 : "5초 후 게임이 시작됩니다" → 4 → … → "게임이 시작되었습니다" */
+		if (m_ullStartAt != 0)
+		{
+			const ULONGLONG ullNow = GetTickCount64();
+			if (ullNow >= m_ullStartAt)
+			{
+				m_ullStartAt = 0;
+				m_tView.vecChats.push_back({ L"", L"게임이 시작되었습니다", false, true });
+				m_tView.isPlaying = true;
+				m_isDirty = true;
+			}
+			else
+			{
+				const int iCount = static_cast<int>((m_ullStartAt - ullNow + 999) / 1000);	/* 남은 초 (올림) */
+				if (iCount != m_iLastCount)
+				{
+					m_iLastCount = iCount;
+					m_tView.vecChats.push_back({ L"", std::to_wstring(iCount) + L"초 후 게임이 시작됩니다", false, true });
+					m_isDirty = true;
+				}
+			}
+		}
+	}
+
+	void CScene_Room::Show_Notice(const std::wstring& strText)
+	{
+		m_tView.strNotice = strText;
+		m_ullNoticeEnd = GetTickCount64() + NOTICE_MS;
+		m_isDirty = true;
 	}
 
 	void CScene_Room::Late_Update()
@@ -170,6 +213,31 @@ namespace MafiaClient
 			tInfo.iMasterKey = tMembers.iMasterKey;
 			memcpy(tInfo.arrSeats, tMembers.arrSeats, sizeof(tInfo.arrSeats));
 			Apply_RoomInfo();
+			break;
+		}
+		/* 게임 시작 요청 받은거 */
+		case Protocol::PACKET_TYPE::S_TO_C_STARTGAME:
+		{
+			const Protocol::S_TO_C_STARTGAME* pData = reinterpret_cast<const Protocol::S_TO_C_STARTGAME*>(tEvent.Get_Body());
+			if (pData == nullptr || tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_STARTGAME)) break;
+
+			switch (pData->eResult)
+			{
+			case Protocol::STARTGAME_RESULT::OK:			/* 방 전원이 받음 : 카운트다운 시작 (Update에서 1초마다 알림) */
+				m_ullStartAt = GetTickCount64() + Protocol::START_COUNTDOWN_MS;
+				m_iLastCount = 0;
+				break;
+			case Protocol::STARTGAME_RESULT::NOT_FULL:		/* 방장만 받음 */
+			{
+				int iSeated{ 0 };
+				for (const ConsoleUI::SeatView& tSeat : m_tView.arrSeats) if (!tSeat.strName.empty()) ++iSeated;
+				Show_Notice(L"인원이 부족합니다 (" + std::to_wstring(iSeated) + L"/" + std::to_wstring(Protocol::MAX_ROOM_PLAYER) + L")");
+				break;
+			}
+			default:
+				Show_Notice(L"게임을 시작할 수 없습니다");
+				break;
+			}
 			break;
 		}
 		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:

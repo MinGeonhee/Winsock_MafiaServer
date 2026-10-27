@@ -9,6 +9,7 @@ namespace Net
 namespace MafiaServer
 {
 	class CChatting;
+	class CMafiaLogic;
 	class CServerApp;
 
 	class CRoom
@@ -53,16 +54,28 @@ namespace MafiaServer
 		{
 			return iKey != Net::NONE_CLIENTKEY && std::find(m_arrayPlayerClientKeys.begin(), m_arrayPlayerClientKeys.end(), iKey) != m_arrayPlayerClientKeys.end();
 		}
+		bool				Can_Start() const ;
+		/* 시작 승인 : 로딩(카운트다운) 시작. START_COUNTDOWN_MS 뒤 Update에서 게임으로 */
+		void				Start_Loading(ULONGLONG ullNow);
 	public:
 		/* 방 참여 신청 받기 */
 		ENTER_RESULT	Enter(Net::ClientKey iEnterPlayerClientKey);
 		void			Exit(Net::ClientKey iExitPlayerClientKey);
 
+		/* 매 프레임 : 시각은 CServerApp이 한 번 읽어 Pre_Update / Update에 같은 값으로 내려줌. 게임 중이면 게임 로직에 그대로 전달 */
+		void			Pre_Update(ULONGLONG ullNow);
+		void			Update(ULONGLONG ullNow);
+		void			LateUpdate(ULONGLONG ullNow);
+
 		/* 채팅 관련 */
 		void			Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServere);
 
+		/* 방안의 모든 사람에게 패킷보내기 */
+		void			SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen, Net::CServer* pMainServer) const;
+
 	private:
 		void			Change_Master();
+		void			Start_Game(ULONGLONG ullNow);		/* 로딩 끝 : 게임 상태 + 게임 로직 생성 */
 	public:
 		static std::unique_ptr<CRoom> Create(const Init_Data& tData);
 	private:
@@ -74,7 +87,9 @@ namespace MafiaServer
 
 		uint16_t			m_iCurPlayerNum;
 		std::array< Net::ClientKey , Protocol::MAX_ROOM_PLAYER > m_arrayPlayerClientKeys;
-		std::unique_ptr<CChatting>	m_pChatting;
+		std::unique_ptr<CChatting>		m_pChatting;
+		std::unique_ptr<CMafiaLogic>	m_pLogic;		/* 게임 중일 때만 (게임 시작에 만들고 끝나면 reset) */
+		ULONGLONG						m_ullLoadingStart{ 0 };	/* 로딩(카운트다운) 시작 시각 */
 	};
 }
 

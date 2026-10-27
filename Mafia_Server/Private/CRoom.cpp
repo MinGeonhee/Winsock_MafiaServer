@@ -2,6 +2,8 @@
 #include "CRoom.h"
 #include "CServerApp.h"
 #include "CChatting.h"
+#include "CMafiaLogic.h"
+#include <random>
 
 namespace MafiaServer
 {
@@ -16,11 +18,67 @@ namespace MafiaServer
 		m_pServerApp = nullptr;
 	}
 
+	void CRoom::Pre_Update(ULONGLONG ullNow)
+	{
+		/* 대기 중이면 할 일 없음, 게임 중이면 시각을 그대로 넘김 (시간 계산은 게임 로직이) */
+		if (m_pLogic == nullptr) return;
+		m_pLogic->Pre_Update(ullNow);
+	}
+
+	void CRoom::Update(ULONGLONG ullNow)
+	{
+		/* 로딩(카운트다운)이 끝나면 게임 시작 */
+		if (m_eCurState == CRoom::STATE::LOADING && ullNow - m_ullLoadingStart >= Protocol::START_COUNTDOWN_MS)
+			Start_Game(ullNow);
+
+		if (m_pLogic == nullptr) return;
+		m_pLogic->Update(ullNow);
+	}
+
+	void CRoom::Start_Loading(ULONGLONG ullNow)
+	{
+		m_eCurState = CRoom::STATE::LOADING;		/* 이때부터 입장 막힘 (Enter가 WATING만 받음) */
+		m_ullLoadingStart = ullNow;
+	}
+
+	void CRoom::Start_Game(ULONGLONG ullNow)
+	{
+		/* 앉은 사람 중 한 명을 마피아로 (ponytail: 마피아 1명 고정, 직업 배정은 게임 로직으로 옮길 예정) */
+		std::vector<Net::ClientKey> vecSeated;
+		for (Net::ClientKey Key : m_arrayPlayerClientKeys)
+			if (Key != Net::NONE_CLIENTKEY) vecSeated.push_back(Key);
+		if (vecSeated.empty()) { m_eCurState = CRoom::STATE::WATING; return; }
+
+		static std::mt19937 s_Random{ std::random_device{}() };
+		std::uniform_int_distribution<size_t> tPick(0, vecSeated.size() - 1);
+
+		CMafiaLogic::Init_Data tData{};
+		tData.iRoomKey			= m_iRoomKey;
+		tData.iMafiaClientKey	= vecSeated[tPick(s_Random)];
+		tData.ullNow			= ullNow;
+
+		m_pLogic = CMafiaLogic::Create(tData);
+		m_eCurState = (m_pLogic != nullptr) ? CRoom::STATE::GAME : CRoom::STATE::WATING;
+	}
+
+	void CRoom::LateUpdate(ULONGLONG ullNow)
+	{
+
+	}
+
 	bool CRoom::Get_IsPlaying() const
 	{
 		if (m_eCurState == CRoom::STATE::GAME || m_eCurState == CRoom::STATE::LOADING)
 			return true;
 		return false;
+	}
+
+
+	bool CRoom::Can_Start() const
+	{
+		/* 대기 중이고, 최소 인원 이상 앉아 있어야 시작 (테스트용 최소 인원은 Protocol::MIN_START_PLAYER) */
+		if (m_eCurState != CRoom::STATE::WATING) return false;
+		return m_iCurPlayerNum >= Protocol::MIN_START_PLAYER;
 	}
 
 	CRoom::ENTER_RESULT CRoom::Enter(Net::ClientKey iEnterPlayerClientKey)
@@ -95,6 +153,18 @@ namespace MafiaServer
 		/* 발송 */
 		for (auto Key : m_arrayPlayerClientKeys)
 			pMainServer->Send_Packet(Key, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tChat);
+	}
+
+	void CRoom::SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen  ,Net::CServer* pMainServer) const
+	{
+		if (pBody == nullptr) return;
+
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY)continue;
+
+			pMainServer->Send_Packet(Key, static_cast<uint16_t>(tType), pBody , tBodyLen );
+		}
 	}
 
 	void CRoom::Change_Master()

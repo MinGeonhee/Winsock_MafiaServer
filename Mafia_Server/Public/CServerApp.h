@@ -74,6 +74,9 @@ namespace MafiaServer
 		/* 서버 관리 */
 		std::unique_ptr<Net::CServer> m_pMainServer;
 		bool						  m_isDirty;	// 바뀐 게 있을 때만 다시 그림
+
+		/* 이번 프레임 시각 (ms, PC 켜진 뒤 경과) : 프레임 시작에 한 번 읽고 이 프레임 내내 같은 값 사용 */
+		ULONGLONG					  m_ullNow{ 0 };
 	};
 }
 

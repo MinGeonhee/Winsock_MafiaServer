@@ -5,6 +5,7 @@
 #include "ConsoleUI.h"
 #include "ConsoleUI_Server.h"
 #include "CPlayerManager.h"
+#include "CMafiaLogic.h"
 
 namespace MafiaServer
 {
@@ -56,18 +57,21 @@ namespace MafiaServer
 
 	void CServerApp::Pre_Update()
 	{
+		/* 현재 시각 먼저 : 아래 패킷 처리(콜백)도 이 시각으로 판단 */
+		m_ullNow = GetTickCount64();
+		m_pRoomManager->Pre_Update(m_ullNow);		/* 방 → (게임 중이면) 게임 로직에 시각 전달 */
+
 		m_pMainServer->Pre_Update();
-
-
 	}
 
 	void CServerApp::Update()
 	{
 		Key_Input();
 
+		/* 방 → (게임 중이면) 게임 로직 : 단계 시간 검사 */
+		m_pRoomManager->Update(m_ullNow);
+
 		m_pMainServer->Update();
-
-
 	}
 
 	void CServerApp::Late_Update()
@@ -209,6 +213,40 @@ namespace MafiaServer
 		case Protocol::PACKET_TYPE::C_TO_S_EXIT_ROOM:
 		{
 			Leave_Room(tEvent.iKey);
+			break;
+		}
+		case Protocol::PACKET_TYPE::C_TO_S_STARTGAME:
+		{
+			uint16_t iLen = tEvent.Get_BodyLen();
+			const Protocol::C_TO_S_STARTGAME* pBody = reinterpret_cast<const Protocol::C_TO_S_STARTGAME*>(tEvent.Get_Body());
+
+			Protocol::S_TO_C_STARTGAME tGameStartResult{};
+			if (iLen != sizeof(Protocol::C_TO_S_STARTGAME) || pBody == nullptr)
+			{
+				tGameStartResult.eResult = Protocol::STARTGAME_RESULT::SERVER_ERROR;
+			}
+			else
+			{
+				/* 게임 시작할 수 있는지 체크 */
+				Net::ClientKey iRoomMasterKey = tEvent.iKey;
+				Protocol::ROOM_KEY iRoomKey = pBody->iRoomKey;
+
+				/* 유효성 체크 */
+				const CRoom* pRoom = m_pRoomManager->Find_Room(iRoomKey);
+				if (pRoom == nullptr) tGameStartResult.eResult = Protocol::STARTGAME_RESULT::SERVER_ERROR;
+				else if (pRoom->Get_MasterKey() != iRoomMasterKey) tGameStartResult.eResult = Protocol::STARTGAME_RESULT::SERVER_ERROR;
+				else 	pRoom->Can_Start() ? tGameStartResult.eResult = Protocol::STARTGAME_RESULT::OK : tGameStartResult.eResult = Protocol::STARTGAME_RESULT::NOT_FULL;
+			}
+
+			/* 승인 : 방을 로딩(카운트다운) 상태로 → START_COUNTDOWN_MS 뒤 방 Update에서 게임 시작 */
+			if (tGameStartResult.eResult == Protocol::STARTGAME_RESULT::OK)
+				m_pRoomManager->Start_Loading(pBody->iRoomKey, m_ullNow);
+
+			if (tGameStartResult.eResult == Protocol::STARTGAME_RESULT::OK)
+				m_pRoomManager->Find_Room(pBody->iRoomKey)->SendPacket_All( Protocol::PACKET_TYPE::S_TO_C_STARTGAME ,&tGameStartResult,sizeof( Protocol::S_TO_C_STARTGAME ) , m_pMainServer.get() );
+			else m_pMainServer->Send_Packet(tEvent.iKey,static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_STARTGAME), tGameStartResult);
+	
+			
 			break;
 		}
 		case Protocol::PACKET_TYPE::END:			break;

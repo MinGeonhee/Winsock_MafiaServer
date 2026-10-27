@@ -77,4 +77,25 @@ namespace MafiaServer
 		
 		m_umapRooms[iRoomKey]->Chatting(tTime,iChatterKey,wstrText,pMainServer);
 	}
+
+	bool CRoomManager::Start_Loading(Protocol::ROOM_KEY iRoomKey, ULONGLONG ullNow)
+	{
+		auto iter = m_umapRooms.find(iRoomKey);
+		if (iter == m_umapRooms.end()) return false;
+
+		iter->second->Start_Loading(ullNow);
+		return true;
+	}
+
+	void CRoomManager::Pre_Update(ULONGLONG ullNow)
+	{
+		for (auto& Pair : m_umapRooms)
+			Pair.second->Pre_Update(ullNow);
+	}
+
+	void CRoomManager::Update(ULONGLONG ullNow)
+	{
+		for (auto& Pair : m_umapRooms)
+			Pair.second->Update(ullNow);
+	}
 }

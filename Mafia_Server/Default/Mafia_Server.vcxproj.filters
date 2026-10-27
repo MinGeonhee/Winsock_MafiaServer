@@ -49,6 +49,9 @@
     <Filter Include="소스 파일\01. Core\03. Chatting">
       <UniqueIdentifier>{906d78ac-1bf1-45fb-9c54-1e839aa1565e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\02. Logic\03. MafiaLogic">
+      <UniqueIdentifier>{0eb48ac5-1f33-4e53-a464-764c3d481bd6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Private\pch.cpp">
@@ -81,6 +84,9 @@
     <ClCompile Include="..\Private\CChatting.cpp">
       <Filter>소스 파일\01. Core\03. Chatting</Filter>
     </ClCompile>
+    <ClCompile Include="..\Private\CMafiaLogic.cpp">
+      <Filter>소스 파일\02. Logic\03. MafiaLogic</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\pch.h">
@@ -112,6 +118,9 @@
     </ClInclude>
     <ClInclude Include="..\Public\CChatting.h">
       <Filter>소스 파일\01. Core\03. Chatting</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Public\CMafiaLogic.h">
+      <Filter>소스 파일\02. Logic\03. MafiaLogic</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
