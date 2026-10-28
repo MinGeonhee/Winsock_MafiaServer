@@ -857,6 +857,16 @@ namespace ConsoleUI
 		std::vector<ChatView>	vecChats;			// 오래된 것 → 최근. 화면에 들어가는 만큼 끝에서부터 그림
 		std::wstring			strInput;			// 입력 중인 채팅
 		std::wstring			strNotice;			// 안내 줄 오른쪽 빨간 알림 ("인원이 부족합니다" 등, 비면 없음)
+		bool					isWaiting{ true };	// 대기 중일 때만 [F5] 게임 시작(방장) · [Esc] 나가기 안내 (카운트다운 / 게임 중엔 숨김)
+		std::wstring			strHelp;			// 단계별 조작 안내 ("[1~7] 투표", "[Y] 찬성  [N] 반대" 등, 비면 없음)
+		std::wstring			strInputLock;		// 비어 있지 않으면 채팅 막힘 : 입력 줄에 이 안내를 회색으로 (예 "투표 중에는 채팅을 칠 수 없습니다")
+
+		/* 투표 (VOTE 단계) : 입력 줄 자리에 투표 막대, 고른 의자는 빨간 이중 테두리 */
+		static constexpr int	VOTE_NONE{ -2 };	// 아직 안 고름
+		static constexpr int	VOTE_ABSTAIN{ -1 };	// 무효표
+		bool					isVoting{ false };
+		int						iVoteSel{ VOTE_NONE };	// VOTE_NONE / VOTE_ABSTAIN / 0 ~ 6 = 자리
+		bool					isVoteDone{ false };	// Enter로 확정함 (더는 못 바꿈)
 	};
 
 	/* 한 줄 입력 (막지 않음) : Scene이 Poll_Keys(true)로 받은 키를 하나씩 넘김
@@ -1021,17 +1031,19 @@ namespace ConsoleUI
 				continue;
 			}
 
+			const bool isPick = tView.isVoting && tView.iVoteSel == i;		// 투표로 고른 의자 : 빨간 이중 테두리
 			const wchar_t* szName = tSeat.isDead ? Gray : (tSeat.isMe ? ME : NAME);
-			const wchar_t* szLine = tSeat.isDead ? Gray : (tSeat.isMe ? ME : L"\x1b[37m");
+			const wchar_t* szLine = isPick ? L"\x1b[1;91m" : (tSeat.isDead ? Gray : (tSeat.isMe ? ME : L"\x1b[37m"));
+			const wchar_t  H = isPick ? L'═' : L'─', V = isPick ? L'║' : L'│';
 			const std::wstring strName = (tSeat.isMaster ? L"★ " : L"") + tSeat.strName;	// ★는 터미널에서 1칸보다 넓게 그려져 뒤에 한 칸 띄움
 			const std::wstring strFit = Fit(strName, CHAIR_W - 2);			// 길면 자름
 			const int iNameW = (std::min)(Width(strName), CHAIR_W - 2);
 
-			tCanvas.Put(iRow, iCol, L"┌", szLine);
-			tCanvas.Put(iRow, iCol + 1, strNo, Gray);
-			tCanvas.Put(iRow, iCol + 2, std::wstring(CHAIR_W - 3, L'─') + L"┐", szLine);
+			tCanvas.Put(iRow, iCol, isPick ? L"╔" : L"┌", szLine);
+			tCanvas.Put(iRow, iCol + 1, strNo, isPick ? szLine : Gray);
+			tCanvas.Put(iRow, iCol + 2, std::wstring(CHAIR_W - 3, H) + (isPick ? L"╗" : L"┐"), szLine);
 
-			tCanvas.Put(iRow + 1, iCol, L"│" + Spaces(CHAIR_W - 2) + L"│", szLine);
+			tCanvas.Put(iRow + 1, iCol, V + Spaces(CHAIR_W - 2) + V, szLine);
 			const int iNameCol = iCol + 1 + (CHAIR_W - 2 - iNameW) / 2;
 			if (tSeat.isMaster)
 			{
@@ -1042,7 +1054,7 @@ namespace ConsoleUI
 				tCanvas.Put(iRow + 1, iNameCol, strFit.substr(0, strFit.find_last_not_of(L' ') + 1), szName);
 
 			/* 아래 테두리 : 태그가 있으면 └─투표 2──┘ */
-			tCanvas.Put(iRow + 2, iCol, L"└" + std::wstring(CHAIR_W - 2, L'─') + L"┘", szLine);
+			tCanvas.Put(iRow + 2, iCol, (isPick ? L"╚" : L"└") + std::wstring(CHAIR_W - 2, H) + (isPick ? L"╝" : L"┘"), szLine);
 			if (!tSeat.strTag.empty())
 			{
 				const std::wstring strTag = Fit(tSeat.strTag, CHAIR_W - 4);
@@ -1106,21 +1118,54 @@ namespace ConsoleUI
 		std::wstring strShown = tView.strInput;
 		while (Width(strShown) > INPUT_W - 5) strShown.erase(0, 1);
 		str += L"  "; str += Gray; str += L"┌" + std::wstring(INPUT_W, L'─') + L"┐"; str += Reset; str += L"\x1b[K\n";
-		str += L"  "; str += Gray; str += L"│"; str += Reset; str += L" "; str += Yellow; str += L"▸ "; str += Reset;
-		str += strShown; str += Detail::CURSOR; str += L" "; str += Reset; str += Spaces(INPUT_W - 4 - Width(strShown));
+		str += L"  "; str += Gray; str += L"│"; str += Reset; str += L" ";
+		const bool isChatInput = tView.strInputLock.empty() && !tView.isVoting;
+		if (tView.isVoting)
+		{
+			/* 투표 막대 : "▸ 투표   [ 2번  민수 ]   Enter 를 누르면 투표합니다" */
+			std::wstring strTarget;
+			if (tView.iVoteSel == RoomScreenView::VOTE_ABSTAIN)	strTarget = L"무효표";
+			else if (tView.iVoteSel >= 0)						strTarget = std::to_wstring(tView.iVoteSel + 1) + L"번  " + tView.arrSeats[tView.iVoteSel].strName;
+
+			const std::wstring strLabel = tView.isVoteDone ? L"투표 완료" : L"▸ 투표";
+			const std::wstring strBox   = strTarget.empty() ? L"" : L"  " + strTarget + L"  ";
+			const std::wstring strTail  = tView.isVoteDone  ? L"   다음 단계까지 기다려 주세요"
+										: strTarget.empty() ? L"자리 번호를 눌러 고르세요   ( 0 = 무효표 )"
+										:                     L"   ←→ 로 바꾸고  Enter 를 누르면 투표합니다";
+
+			str += L" "; str += tView.isVoteDone ? Green : Yellow; str += Bold; str += strLabel; str += Reset; str += L"   ";
+			if (!strBox.empty()) { str += tView.isVoteDone ? L"\x1b[1;30;42m" : L"\x1b[1;97;41m"; str += strBox; str += Reset; }
+			str += Gray; str += strTail; str += Reset;
+			str += Spaces((std::max)(0, INPUT_W - 1 - (1 + Width(strLabel) + 3 + Width(strBox) + Width(strTail))));
+		}
+		else if (isChatInput)
+		{
+			str += Yellow; str += L"▸ "; str += Reset;
+			str += strShown; str += Detail::CURSOR; str += L" "; str += Reset; str += Spaces(INPUT_W - 4 - Width(strShown));
+		}
+		else
+		{
+			/* 채팅 막힘 : 입력 대신 회색 안내 (커서 없음) */
+			const std::wstring strLock = Fit(L"  " + tView.strInputLock, INPUT_W - 1);
+			str += Gray; str += strLock; str += Reset;
+		}
 		str += Gray; str += L"│"; str += Reset; str += L"\x1b[K\n";
 		str += L"  "; str += Gray; str += L"└" + std::wstring(INPUT_W, L'─') + L"┘"; str += Reset; str += L"\x1b[K\n";
 
 		str += L"  ";
-		str += Yellow; str += L"[Enter]"; str += Reset; str += L" 보내기   ";
-		if (tView.isMaster && !tView.isPlaying) { str += Yellow; str += L"[F5]"; str += Reset; str += L" 게임 시작   "; }
-		str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기";
+		if (isChatInput) { str += Yellow; str += L"[Enter]"; str += Reset; str += L" 보내기   "; }
+		if (!tView.strHelp.empty()) { str += Yellow; str += tView.strHelp; str += Reset; str += L"   "; }
+		if (tView.isWaiting && tView.isMaster) { str += Yellow; str += L"[F5]"; str += Reset; str += L" 게임 시작   "; }
+		if (tView.isWaiting) { str += Yellow; str += L"[Esc]"; str += Reset; str += L" 나가기"; }
 		if (!tView.strNotice.empty()) { str += L"      "; str += Red; str += Bold; str += L"! "; str += tView.strNotice; str += Reset; }
 		str += L"\x1b[K\x1b[J";
 
 		/* (숨긴) 진짜 커서를 입력 글자 끝으로 → 한글 IME 조합 글자가 입력 줄에 뜸
 		   행 : 빈 줄 1 + 머리 1 + 구분선 1 + 빈 줄 1 + 원탁 17 + 입력 위 테두리 1 = 22 → 23번째 줄 */
-		str += L"\x1b[" + std::to_wstring(4 + AREA_H + 2) + L";" + std::to_wstring(2 + 1 + 3 + Width(strShown) + 1) + L"H";
+		if (isChatInput)
+			str += L"\x1b[" + std::to_wstring(4 + AREA_H + 2) + L";" + std::to_wstring(2 + 1 + 3 + Width(strShown) + 1) + L"H";
+		else
+			str += L"\x1b[1;1H";		/* 채팅 막힘 : 조합 글자가 안내 문구 위에 뜨지 않게 빈 곳으로 */
 		Write(str);
 	}
 

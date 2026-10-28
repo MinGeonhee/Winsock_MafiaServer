@@ -134,6 +134,7 @@ namespace MafiaServer
 		switch (tType)
 		{
 		case Protocol::PACKET_TYPE::C_TO_S_LOGIN:
+#pragma region C_TO_S_LOGIN
 		/* Client -> Server에게 본인 아이디를 줌 */
 		{
 			if (tEvent.Is_NetPacket()) return;
@@ -177,9 +178,11 @@ namespace MafiaServer
 			}
 			default:break;
 			}
-			break;
+			break; 
+#pragma endregion
 		}
 		case Protocol::PACKET_TYPE::C_TO_S_CHAT:
+#pragma region C_TO_S_CHAT
 		{
 			if (tEvent.Is_NetPacket()) return;
 			uint16_t iLen = tEvent.Get_BodyLen();
@@ -190,7 +193,8 @@ namespace MafiaServer
 			SYSTEMTIME tTime{};
 			GetLocalTime(&tTime);
 			m_pRoomManager->Chatting(tPacket.tData.iRoomKey, tTime, tEvent.iKey, tPacket.tData.wszText, m_pMainServer.get());
-			break;
+			break; 
+#pragma endregion
 		}
 		case Protocol::PACKET_TYPE::C_TO_S_REQ_DATA:
 		{
@@ -212,11 +216,19 @@ namespace MafiaServer
 		/* 방 나가기 (본문 없음) */
 		case Protocol::PACKET_TYPE::C_TO_S_EXIT_ROOM:
 		{
+#pragma region C_TO_S_EXIT_ROOM
+
+			/* 카운트다운 · 게임 중엔 못 나감 (끊김은 Leave_Room을 바로 부르니 여기 안 걸림) */
+			if (const CPlayer* pPlayer = m_pPlayerManager->Find_Player(tEvent.iKey))
+				if (const CRoom* pRoom = m_pRoomManager->Find_Room(pPlayer->Get_RoomKey()); pRoom && pRoom->Get_IsPlaying())
+					break;
 			Leave_Room(tEvent.iKey);
 			break;
+#pragma endregion
 		}
 		case Protocol::PACKET_TYPE::C_TO_S_STARTGAME:
 		{
+#pragma region C_TO_S_STARTGAME
 			uint16_t iLen = tEvent.Get_BodyLen();
 			const Protocol::C_TO_S_STARTGAME* pBody = reinterpret_cast<const Protocol::C_TO_S_STARTGAME*>(tEvent.Get_Body());
 
@@ -247,9 +259,21 @@ namespace MafiaServer
 				m_pRoomManager->Find_Room(pBody->iRoomKey)->SendPacket_All( Protocol::PACKET_TYPE::S_TO_C_STARTGAME_RESULT ,&tGameStartResult,sizeof( Protocol::S_TO_C_STARTGAME_RESULT ) , m_pMainServer.get() );
 			else m_pMainServer->Send_Packet(tEvent.iKey,static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_STARTGAME_RESULT), tGameStartResult);
 	
-			
 			break;
 		}
+#pragma endregion
+		case Protocol::PACKET_TYPE::C_TO_S_VOTE:
+#pragma region 투표 처리
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::C_TO_S_VOTE)) break;
+			const Protocol::C_TO_S_VOTE* pBody = reinterpret_cast<const Protocol::C_TO_S_VOTE*>(tEvent.Get_Body());
+			if ( pBody  == nullptr) break;
+
+			/* 투표 결과전달하기 */
+			m_pRoomManager->Get_Instance()->Vote(pBody->iRoomKey,tEvent.iKey,pBody->iVoteSeat);
+			break;
+		}
+#pragma endregion
 		case Protocol::PACKET_TYPE::END:			break;
 		default:									break;
 		}

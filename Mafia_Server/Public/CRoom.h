@@ -70,12 +70,17 @@ namespace MafiaServer
 		/* 채팅 관련 */
 		void			Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServere);
 
+		/* 투표 : 보낸 사람 자리를 찾아 로직에 넘김 (iSeat = NONE_SEAT 이면 무효표) */
+		void			Vote(Net::ClientKey iVoterKey, uint8_t iSeat);
+
 		/* 방안의 모든 사람에게 패킷보내기 */
 		void			SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen, Net::CServer* pMainServer) const;
 
 	private:
 		void			Change_Master();
 		void			Send_ChangePhase(ULONGLONG uillNow);
+		void			Send_VoteResult();						/* VOTE 끝 : 지목된 자리 방 전원에게 */
+		int				Find_Seat(Net::ClientKey iKey) const;	/* 없으면 -1 */
 		void			Start_Game(ULONGLONG ullNow);		/* 로딩 끝 : 게임 상태 + 게임 로직 생성 */
 	public:
 		static std::unique_ptr<CRoom> Create(const Init_Data& tData);

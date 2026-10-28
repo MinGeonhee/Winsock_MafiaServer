@@ -54,6 +54,29 @@ namespace Protocol
 		Protocol::GAME_PHASE	eCurPhase{Protocol::GAME_PHASE::END};	/* 현재 Phase */
 		uint16_t				iDay{0};								/* 몇일째 인지 */
 		uint32_t				iRemainMs{ 0 };							/* 현재 Phase 제한시간 */
+		uint8_t					iAliveMask{ 0 };						/* 비트 i = i번 자리 생존 (화면용 : 죽은 의자 회색 · 투표 후보) */
+	};
+
+	/* ---------------- 투표 (비공개 : 결과만 공개) ---------------- */
+	constexpr uint8_t NONE_SEAT = 0xFF;		/* 자리 없음 (투표 결과 동점 / 0표 → 처형 없음) */
+
+	/* 클라 → 서버 : VOTE 단계에 고른 자리 (0 ~ MAX_ROOM_PLAYER-1, NONE_SEAT = 무효표). 클라는 Enter로 확정할 때 한 번만 보냄 */
+	struct C_TO_S_VOTE
+	{
+		uint8_t				iVoteSeat{ NONE_SEAT }; /* 투표한 자리숫자 */
+		Protocol::ROOM_KEY	iRoomKey{};			/* 내 방번호 */
+	};
+
+	/* 서버 → 클라 : VOTE 단계 끝, 방 전원에게. 처형 대상 자리 (NONE_SEAT = 없음 → 바로 밤으로) */
+	struct S_TO_C_VOTE_RESULT
+	{
+		uint8_t		iSeat{ NONE_SEAT };
+	};
+
+	/* 클라 → 서버 : LAST_VOTE 단계 찬반 (찬성 = 처형) */
+	struct C_TO_S_LAST_VOTE
+	{
+		bool		isAgree{ false };
 	};
 
 

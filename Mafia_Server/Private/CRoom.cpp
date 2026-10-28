@@ -27,7 +27,11 @@ namespace MafiaServer
 		const Protocol::GAME_PHASE ePrev = m_pLogic->Get_Phase();
 		m_pLogic->Pre_Update(ullNow);
 		if (m_pLogic->Get_Phase() != ePrev)
+		{
+			/* 결과가 먼저 가야 클라가 최후 변론 단계에서 지목된 사람을 앎 */
+			if (ePrev == Protocol::GAME_PHASE::VOTE) Send_VoteResult();
 			Send_ChangePhase(ullNow);
+		}
 	}
 
 	void CRoom::Update(ULONGLONG ullNow)
@@ -75,7 +79,10 @@ namespace MafiaServer
 		CMafiaLogic::Init_Data tData{};
 		tData.iRoomKey = m_iRoomKey;
 		tData.iMafiaClientKey = vecSeated[tPick(s_Random)];
+		tData.iMafiaSeat = Find_Seat(tData.iMafiaClientKey);
 		tData.ullNow = ullNow;
+		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+			tData.arrSeated[i] = (m_arrayPlayerClientKeys[i] != Net::NONE_CLIENTKEY);
 
 		m_pLogic = CMafiaLogic::Create(tData);
 		if (m_pLogic == nullptr) { m_eCurState = CRoom::STATE::WATING; return; }
@@ -107,7 +114,6 @@ namespace MafiaServer
 		return false;
 	}
 
-
 	bool CRoom::Can_Start() const
 	{
 		/* 대기 중이고, 최소 인원 이상 앉아 있어야 시작 (테스트용 최소 인원은 Protocol::MIN_START_PLAYER) */
@@ -138,8 +144,6 @@ namespace MafiaServer
 			return CRoom::ENTER_RESULT::FULL_ROOM;
 
 		m_iCurPlayerNum++;
-
-
 		return CRoom::ENTER_RESULT::OK;
 	}
 
@@ -173,6 +177,11 @@ namespace MafiaServer
 		if (pPlayer == nullptr) return;
 		if (m_pChatting == nullptr) return;
 
+		/* 게임 중 : 단계 규칙상 못 치는 사람의 채팅은 버림 (클라도 막지만 서버가 최종 판단) */
+		const bool isGame = (m_eCurState == CRoom::STATE::GAME && m_pLogic);
+		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return;
+		const bool isMafiaOnly = isGame && m_pLogic->Get_Phase() == Protocol::GAME_PHASE::NIGHT;	/* 밤 채팅은 마피아만 받음 */
+
 		m_pChatting->Chatting(tTime,iChatterKey,wstrText);
 		/* 추후 채팅을 실패했을 경우에 실패 메세지 따로 첨부 */
 
@@ -185,8 +194,40 @@ namespace MafiaServer
 		wcsncpy_s(tChat.wszText, wstrText.c_str(), _TRUNCATE);
 
 		/* 발송 */
-		for (auto Key : m_arrayPlayerClientKeys)
+		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+		{
+			const Net::ClientKey Key = m_arrayPlayerClientKeys[i];
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			if (isMafiaOnly && !m_pLogic->Is_Mafia(i)) continue;
 			pMainServer->Send_Packet(Key, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tChat);
+		}
+	}
+
+	void CRoom::Vote(Net::ClientKey iVoterKey, uint8_t iSeat)
+	{
+		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return;
+		m_pLogic->Vote(Find_Seat(iVoterKey), iSeat == Protocol::NONE_SEAT ? -1 : iSeat);
+	}
+
+	int CRoom::Find_Seat(Net::ClientKey iKey) const
+	{
+		if (iKey == Net::NONE_CLIENTKEY) return -1;
+		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+			if (m_arrayPlayerClientKeys[i] == iKey) return i;
+		return -1;
+	}
+
+	void CRoom::Send_VoteResult()
+	{
+		Protocol::S_TO_C_VOTE_RESULT tBody{};
+		const int iSeat = m_pLogic->Get_AccusedSeat();
+		if (iSeat >= 0) tBody.iSeat = static_cast<uint8_t>(iSeat);
+
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_VOTE_RESULT, tBody);
+		}
 	}
 
 	void CRoom::SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen  ,Net::CServer* pMainServer) const
@@ -221,6 +262,7 @@ namespace MafiaServer
 		tBody.eCurPhase = m_pLogic->Get_Phase();
 		tBody.iDay		= m_pLogic->Get_Day();
 		tBody.iRemainMs	= m_pLogic->Get_Remain(uillNow);
+		tBody.iAliveMask = m_pLogic->Get_AliveMask();
 
 		for (auto Key : m_arrayPlayerClientKeys)
 		{

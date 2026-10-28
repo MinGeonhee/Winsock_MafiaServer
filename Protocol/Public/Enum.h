@@ -82,6 +82,9 @@ namespace Protocol
 		S_TO_C_STARTGAME_RESULT,			// 서버->클라 게임시작가능여부 판단 체크 후 유무 패킷
 		S_TO_C_STARTGAME,					// 서버->클라 실제 게임 시작 (5초 뒤 서버가 재확인 후, 사람마다 자기 직업 포함)
 		S_TO_C_CHANGEPHASE,					// 서버->클라 페이지 교체
+		C_TO_S_VOTE,						// 클라->서버 투표 (VOTE 단계, 고른 자리)
+		S_TO_C_VOTE_RESULT,					// 서버->클라 투표 결과 (처형 대상 자리, 없으면 NONE_SEAT) → 방 전원
+		C_TO_S_LAST_VOTE,					// 클라->서버 찬반 투표 (LAST_VOTE 단계)
 		END
 	};
 
