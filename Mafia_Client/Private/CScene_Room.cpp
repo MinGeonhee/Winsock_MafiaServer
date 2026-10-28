@@ -19,13 +19,24 @@ namespace MafiaClient
 			}
 		}
 
+		/* 의자 위에 띄우는 직업 (아이콘 + 이름) */
+		std::wstring Job_Role(Protocol::JOB eJob)
+		{
+			switch (eJob)
+			{
+			case Protocol::JOB::CITIZEN:	return L"👤 시민";
+			case Protocol::JOB::MAFIA:		return L"🔪 마피아";
+			default:						return L"";
+			}
+		}
+
 		const wchar_t* Phase_Name(Protocol::GAME_PHASE ePhase)
 		{
 			switch (ePhase)
 			{
 			case Protocol::GAME_PHASE::NIGHT:			return L"밤";
 			case Protocol::GAME_PHASE::LOADING_DAY:		return L"아침이 밝아옵니다";
-			case Protocol::GAME_PHASE::DAY:				return L"아침이 밝았습니다";
+			case Protocol::GAME_PHASE::DAY:				return L"아침";
 			case Protocol::GAME_PHASE::VOTE:			return L"투표";
 			case Protocol::GAME_PHASE::ALLOCUTION:		return L"최후의 변론";
 			case Protocol::GAME_PHASE::LAST_VOTE:		return L"찬반 투표";
@@ -78,7 +89,20 @@ namespace MafiaClient
 		case STATE::WAITING:				Pre_Update_Waiting(vecKeys);	break;
 		case STATE::STARTGAME_COUNTDOWN:	Pre_Update_Countdown(vecKeys);	break;
 		case STATE::GAME:					Pre_Update_Game(vecKeys);		break;
+		case STATE::RESULT:					Pre_Update_Result(vecKeys);		break;
 		default: break;
+		}
+	}
+
+	void CScene_Room::Pre_Update_Result(const std::vector<KEY_EVENT_RECORD>& vecKeys)
+	{
+		if (m_tView.iWinFrame < ConsoleUI::RoomScreenView::WIN_FRAMES) return;	/* 연출 중엔 키 무시 */
+		for (const KEY_EVENT_RECORD& tKey : vecKeys)
+		{
+			if (tKey.wVirtualKeyCode != VK_RETURN) continue;
+			Set_State(STATE::WAITING);			/* 결과 창 닫고 대기 화면 (채팅 · F5 · Esc 다시 가능) */
+			m_tView.vecChats.push_back({ L"", L"대기실로 돌아왔습니다", false, true });
+			return;
 		}
 	}
 
@@ -220,11 +244,17 @@ namespace MafiaClient
 		const bool isYes = (ch == L'y' || ch == L'Y' || tKey.wVirtualKeyCode == 'Y');	/* 한글 상태(ㅛ)여도 Y 키 */
 		const bool isNo  = (ch == L'n' || ch == L'N' || tKey.wVirtualKeyCode == 'N');
 		if (!isYes && !isNo) return;
+		if (m_isLastVoteDone) return;		/* 한 번만 */
+		if (m_iMySeat == m_iAccusedSeat || !Is_Alive(m_iMySeat)) { Show_Notice(L"찬반 투표에 참여할 수 없습니다"); return; }
 
 		Protocol::C_TO_S_LAST_VOTE tBody{};
+		tBody.iRoomKey = m_tRoomInfo.iRoomKey;
 		tBody.isAgree = isYes;
 		m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_LAST_VOTE), tBody);
 		Show_Notice(isYes ? L"찬성했습니다" : L"반대했습니다");
+		m_isLastVoteDone	= true;
+		m_tView.strHelp		= L"다음 단계까지 기다려 주세요";
+		m_isDirty			= true;
 	}
 
 	void CScene_Room::Set_State(STATE eState)
@@ -237,6 +267,14 @@ namespace MafiaClient
 			m_tView.strHelp.clear();
 			m_tView.strInputLock.clear();
 			m_tView.isVoting = false;
+			m_tView.strTally.clear();
+		}
+		if (eState == STATE::RESULT)
+			m_tView.strInputLock = L"결과 창에서 [Enter] 를 누르면 대기실로 돌아갑니다";
+		else
+		{
+			m_tView.iWinFrame = -1;				/* 결과 창 닫기 (Enter, 또는 그 사이 방장이 새 게임을 시작함) */
+			m_tView.vecResult.clear();
 		}
 		m_isDirty = true;
 	}
@@ -249,19 +287,25 @@ namespace MafiaClient
 		m_tView.isVoting	= (ePhase == Protocol::GAME_PHASE::VOTE) && Is_Alive(m_iMySeat);	/* 입력 줄 자리에 투표 막대 (죽었으면 X) */
 		m_tView.iVoteSel	= m_tView.isVoting ? Vote_Candidates().front() : ConsoleUI::RoomScreenView::VOTE_NONE;	/* 첫 후보부터 */
 		m_tView.isVoteDone	= false;
+		m_tView.strTally.clear();
 
 		switch (ePhase)
 		{
 		case Protocol::GAME_PHASE::VOTE:
 			if (m_tView.isVoting) m_tView.strHelp = L"[←→] 고르기   [1~7] 바로 고르기   [0] 무효표   [Enter] 투표";
 			m_tView.strInputLock	= L"투표 중에는 채팅을 칠 수 없습니다";		/* 막대가 대신 그려짐 (채팅 잠금 표시용) */
+			for (int i = 0; i < static_cast<int>(m_tView.arrSeats.size()); ++i)	/* 살아 있는 의자 아래 "투표 : 0 표" (단계 바뀌면 Apply_RoomInfo가 지움) */
+				if (!m_tView.arrSeats[i].strName.empty() && Is_Alive(i)) m_tView.arrSeats[i].iVotes = 0;
 			break;
 		case Protocol::GAME_PHASE::ALLOCUTION:
 			if (m_iAccusedSeat < 0 || m_iAccusedSeat != m_iMySeat)
 				m_tView.strInputLock = L"최후 변론자 외에는 채팅을 칠 수 없습니다";
 			break;
 		case Protocol::GAME_PHASE::LAST_VOTE:
-			m_tView.strHelp			= L"[Y] 찬성  [N] 반대";
+			m_iAgree = m_iDisagree	= 0;
+			m_isLastVoteDone		= (m_iMySeat == m_iAccusedSeat) || !Is_Alive(m_iMySeat);	/* 지목된 사람 · 죽은 사람은 못 함 */
+			m_tView.strTally		= L"찬성 0   반대 0";
+			m_tView.strHelp			= m_isLastVoteDone ? L"찬반 투표가 진행 중입니다" : L"[Y] 찬성  [N] 반대";
 			m_tView.strInputLock	= L"찬반 투표 중에는 채팅을 칠 수 없습니다";
 			break;
 		case Protocol::GAME_PHASE::NIGHT:
@@ -275,6 +319,12 @@ namespace MafiaClient
 			m_tView.strInputLock	= L"지금은 채팅을 칠 수 없습니다";
 			break;
 		default: break;		/* DAY (토론) : 채팅 가능 */
+		}
+
+		if (!Is_Alive(m_iMySeat))		/* 죽으면 단계와 상관없이 채팅 X (서버도 막음) */
+		{
+			m_tView.strHelp.clear();
+			m_tView.strInputLock	= L"죽은 사람은 채팅을 칠 수 없습니다";
 		}
 
 		if (!m_tView.strInputLock.empty()) m_tView.strInput.clear();	/* 치던 글자는 버림 */
@@ -308,7 +358,11 @@ namespace MafiaClient
 			tView.isMe		= (tSeat.iKey == iMyKey);
 			if (tView.isMe) m_iMySeat = static_cast<int>(i);
 			tView.isMaster	= (tSeat.iKey == tInfo.iMasterKey);
-			if (tView.isMe && m_eJob != Protocol::JOB::UNKNOWN) tView.strTag = Job_Name(m_eJob);	/* 내 직업 (자리가 갱신돼도 유지) */
+			if (tView.isMe)
+			{
+				tView.strRole	= Job_Role(m_eJob);	/* 내 직업 : 의자 위 (자리가 갱신돼도 유지) */
+				tView.isRoleRed	= (m_eJob == Protocol::JOB::MAFIA);
+			}
 			tView.isDead	= m_tView.isPlaying && !Is_Alive(static_cast<int>(i));
 		}
 		m_isDirty = true;
@@ -327,6 +381,7 @@ namespace MafiaClient
 		{
 		case STATE::STARTGAME_COUNTDOWN:	Update_Countdown();	break;
 		case STATE::GAME:					Update_Game();		break;
+		case STATE::RESULT:					Update_Result();	break;
 		default: break;		/* 대기 : 할 일 없음 */
 		}
 	}
@@ -349,6 +404,34 @@ namespace MafiaClient
 	{
 		/* 이번 단계 남은 시간 표시 */
 		Update_PhaseTime();
+		Update_Death();
+	}
+
+	void CScene_Room::Update_Result()
+	{
+		/* 마지막 연행 연출이 있으면 그게 먼저 (연행 → 신문 1면 / 마피아 초상화 순서) */
+		Update_Death();
+		if (m_iDyingSeat >= 0) return;
+
+		const ULONGLONG ullNow = GetTickCount64();
+		if (m_ullWinStart == 0) m_ullWinStart = ullNow;
+		const int iFrame = (std::min)(static_cast<int>((ullNow - m_ullWinStart) / DEATH_FRAME_MS), ConsoleUI::RoomScreenView::WIN_FRAMES);	/* 끝 프레임 = 결과 창 */
+		if (iFrame != m_tView.iWinFrame) { m_tView.iWinFrame = iFrame; m_isDirty = true; }
+	}
+
+	void CScene_Room::Update_Death()
+	{
+		if (m_iDyingSeat < 0) return;
+
+		const int iFrame = static_cast<int>((GetTickCount64() - m_ullDeathStart) / DEATH_FRAME_MS);
+		if (iFrame >= ConsoleUI::RoomScreenView::EXEC_FRAMES)	/* 끝 : 원탁이 다시 보이고 그 의자는 생존 비트대로 회색 + ☠ */
+		{
+			m_tView.iExecFrame	= -1;
+			m_iDyingSeat		= -1;
+			m_isDirty			= true;
+			return;
+		}
+		if (iFrame != m_tView.iExecFrame) { m_tView.iExecFrame = iFrame; m_isDirty = true; }
 	}
 
 	void CScene_Room::Apply_Phase(Protocol::GAME_PHASE ePhase, uint16_t iDay, uint32_t iRemainMs)
@@ -523,6 +606,51 @@ namespace MafiaClient
 			m_isDirty = true;
 			break;
 		}
+		case Protocol::PACKET_TYPE::S_TO_C_LASTVOTE_RESULT:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_LASTVOTE_RESULT)) break;
+			Protocol::S_TO_C_LASTVOTE_RESULT tResult{}; memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
+
+			const std::wstring strCount = L"찬성 " + std::to_wstring(m_iAgree) + L" · 반대 " + std::to_wstring(m_iDisagree);	/* 개수는 중계(GAME_LASTVOTE)로 센 값 */
+			if (tResult.iSeat == Protocol::NONE_SEAT || tResult.iSeat != m_iAccusedSeat)	/* 살아남음 */
+			{
+				m_tView.vecChats.push_back({ L"", strCount + L"  →  연행되지 않았습니다", false, true });
+			}
+			else																		/* 연행 : 머그샷 연출 시작 (실제로 빠지는 건 CHANGEPHASE 생존 비트로) */
+			{
+				m_tView.vecChats.push_back({ L"", strCount + L"  →  " + m_tView.arrSeats[tResult.iSeat].strName + L" 님이 연행되었습니다", false, true });
+				m_iDyingSeat		= tResult.iSeat;
+				m_ullDeathStart		= GetTickCount64();
+				m_tView.strExecName	= m_tView.arrSeats[tResult.iSeat].strName;
+				m_tView.iExecSeat	= tResult.iSeat;
+			}
+			m_isDirty = true;
+			break;
+		}
+		/* 게임 끝 : 이긴 팀 + 전원 직업 공개 → 결과 상태 (서버 방은 이미 대기로 돌아감) */
+		case Protocol::PACKET_TYPE::S_TO_C_GAME_END:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_GAME_END)) break;
+			Protocol::S_TO_C_GAME_END tEnd{}; memcpy(&tEnd, tEvent.Get_Body(), sizeof(tEnd));
+
+			m_tView.isMafiaWin = (tEnd.eWinner == Protocol::ENDGAME_RESULT::MAFIA);
+			m_tView.vecResult.clear();
+			for (int i = 0; i < static_cast<int>(m_tView.arrSeats.size()); ++i)
+			{
+				if (m_tView.arrSeats[i].strName.empty()) continue;
+				m_tView.vecResult.push_back({ m_tView.arrSeats[i].strName, tEnd.arrJobs[i] == Protocol::JOB::MAFIA, ((tEnd.iAliveMask >> i) & 1) == 0, i == m_iMySeat });
+			}
+			m_tView.vecChats.push_back({ L"", m_tView.isMafiaWin ? L"마피아가 승리했습니다" : L"시민이 승리했습니다", false, true });
+
+			/* 게임 값 정리 (연출이 원탁을 덮고 있어서 바로 지워도 안 보임) */
+			m_eJob			= Protocol::JOB::UNKNOWN;
+			m_iAliveMask	= 0x7F;
+			m_iAccusedSeat	= -1;
+			m_ullWinStart	= 0;				/* 연행 연출이 끝난 뒤 Update_Result가 시작 */
+			Set_State(STATE::RESULT);
+			Apply_RoomInfo();
+			break;
+		}
 		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:
 		{
 			const Protocol::PROVIDE_DATA* pData = reinterpret_cast<const Protocol::PROVIDE_DATA*>(tEvent.Get_Body());
@@ -537,6 +665,30 @@ namespace MafiaClient
 				tChat.wszText[Protocol::MAX_CHAT_BUF - 1] = L'\0';
 
 				m_tView.vecChats.push_back({ tChat.wszName, tChat.wszText, false , false });
+				m_isDirty = true;
+			}
+			/* 누가 한 표 넣을 때마다 : 로그 + 그 의자 아래에 표 수 (단계 바뀌면 Apply_RoomInfo가 지움) */
+			else if (pData->eDataType == Protocol::DATA_TYPE::GAME_VOTE)
+			{
+				if (tEvent.Get_BodyLen() != sizeof(Protocol::GAME_VOTE)) break;
+				Protocol::GAME_VOTE tVote{}; memcpy(&tVote, tEvent.Get_Body(), sizeof(tVote));
+
+				if (tVote.iVoteSeat >= 0 && tVote.iVoteSeat < static_cast<INT32>(m_tView.arrSeats.size()))
+				{
+					m_tView.arrSeats[tVote.iVoteSeat].iVotes = tVote.iCount;
+					m_tView.vecChats.push_back({ L"", std::to_wstring(tVote.iVoteSeat + 1) + L"번이 투표되었습니다", false, true });
+				}
+				else
+					m_tView.vecChats.push_back({ L"", L"무효표가 나왔습니다", false, true });
+				m_isDirty = true;
+			}
+			else if (pData->eDataType == Protocol::DATA_TYPE::GAME_LASTVOTE)
+			{
+				if (tEvent.Get_BodyLen() != sizeof(Protocol::GAME_LASTVOTE)) break;
+				Protocol::GAME_LASTVOTE tLast{}; memcpy(&tLast, tEvent.Get_Body(), sizeof(tLast));
+				m_tView.vecChats.push_back({ L"", tLast.is ? L"찬성 한 표가 나왔습니다" : L"반대 한 표가 나왔습니다", false, true });
+				++(tLast.is ? m_iAgree : m_iDisagree);
+				m_tView.strTally = L"찬성 " + std::to_wstring(m_iAgree) + L"   반대 " + std::to_wstring(m_iDisagree);	/* 탁자 가운데 */
 				m_isDirty = true;
 			}
 

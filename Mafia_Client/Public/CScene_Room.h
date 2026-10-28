@@ -12,6 +12,7 @@ namespace MafiaClient
 			WAITING,				/* 게임 시작 대기 */
 			STARTGAME_COUNTDOWN,	/* 승인 완료 후 카운트 다운 */
 			GAME,					/* 게임 중 */
+			RESULT,					/* 게임 끝 : 승리 연출 → 결과 창 (Enter → 대기) */
 			END,
 		};
 	protected:
@@ -36,6 +37,7 @@ namespace MafiaClient
 		void	Pre_Update_Waiting(const std::vector<KEY_EVENT_RECORD>& vecKeys);	/* F5(방장) · Esc · 채팅 */
 		void	Pre_Update_Countdown(const std::vector<KEY_EVENT_RECORD>& vecKeys);	/* 채팅만 (못 나감) */
 		void	Pre_Update_Game(const std::vector<KEY_EVENT_RECORD>& vecKeys);		/* 단계별 : 투표 / 찬반 / 채팅 (못 나감) */
+		void	Pre_Update_Result(const std::vector<KEY_EVENT_RECORD>& vecKeys);	/* 결과 창이 뜬 뒤 Enter → 대기 */
 		void	Edit_Chat(const KEY_EVENT_RECORD& tKey);		/* 채팅 입력 · 보내기 (막혀 있으면 무시) */
 		void	Request_StartGame();							/* 방장만 */
 		void	Exit_Room();
@@ -46,7 +48,9 @@ namespace MafiaClient
 
 		/* 상태별 업데이트 */
 		void	Update_Countdown();								/* 5, 4, 3 … 알림 */
-		void	Update_Game();									/* 단계 남은 시간 */
+		void	Update_Game();									/* 단계 남은 시간 · 처형 연출 */
+		void	Update_Death();									/* 연행 연출 프레임 (DEATH_FRAME_MS마다 다시 그림) */
+		void	Update_Result();								/* 연행 연출이 끝난 뒤 승리 연출 → 결과 창 */
 
 		/* 단계별 화면 규칙 : 채팅 잠금 문구 · 조작 안내 (실제 차단은 서버도 함) */
 		void	Apply_PhaseRule(Protocol::GAME_PHASE ePhase);
@@ -81,5 +85,14 @@ namespace MafiaClient
 		int							m_iMySeat{ -1 };		/* 내 자리 (0 ~ 6, Apply_RoomInfo에서) */
 		int							m_iAccusedSeat{ -1 };	/* 투표로 지목된 자리 (최후 변론자, -1 = 없음) */
 		uint8_t						m_iAliveMask{ 0x7F };	/* 비트 i = i번 자리 생존 (CHANGEPHASE로 갱신, 시작은 전원 생존) */
+		int							m_iAgree{ 0 };			/* 찬반 중계로 센 찬성 (탁자 표시용) */
+		int							m_iDisagree{ 0 };
+		bool						m_isLastVoteDone{ false };	/* 찬반은 한 번만 */
+
+		/* 처형 연출 : 결과를 받은 순간부터 원탁을 덮는 해골 상자 (프레임은 m_tView.iExecFrame) */
+		static constexpr ULONGLONG	DEATH_FRAME_MS{ 150 };
+		int							m_iDyingSeat{ -1 };		/* 연출 중인 자리 (-1 = 아님) */
+		ULONGLONG					m_ullDeathStart{ 0 };
+		ULONGLONG					m_ullWinStart{ 0 };		/* 승리 연출 시작 시각 (0 = 아직 : 연행 연출이 먼저 끝나야 함) */
 	};
 }

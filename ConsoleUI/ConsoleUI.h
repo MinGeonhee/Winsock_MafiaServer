@@ -23,6 +23,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unordered_set>
+#include <cmath>
 
 namespace ConsoleUI
 {
@@ -831,7 +833,9 @@ namespace ConsoleUI
 		bool			isMe{ false };		// 파란색
 		bool			isMaster{ false };	// ★
 		bool			isDead{ false };	// 회색 (게임 중)
-		std::wstring	strTag;				// 의자 아래 테두리에 표시 ("투표 2", "마피아" 등, 비면 없음)
+		std::wstring	strRole;			// 의자 위 (직업 "🔪 마피아" 등, 비면 없음)
+		bool			isRoleRed{ false };	// 직업 색 : 빨강(마피아) / 초록(그 외)
+		int				iVotes{ -1 };		// 의자 아래 "투표 : N 표" (-1 = 안 보임)
 	};
 
 	/* 채팅 한 줄 */
@@ -854,6 +858,7 @@ namespace ConsoleUI
 		bool					isNight{ false };
 		int						iDay{ 0 };
 		std::wstring			strSub;				// "0 : 25", "마피아가 고르는 중" 등
+		std::wstring			strTally;			// 탁자 셋째 줄 ("찬성 1   반대 0", 비면 없음)
 		std::vector<ChatView>	vecChats;			// 오래된 것 → 최근. 화면에 들어가는 만큼 끝에서부터 그림
 		std::wstring			strInput;			// 입력 중인 채팅
 		std::wstring			strNotice;			// 안내 줄 오른쪽 빨간 알림 ("인원이 부족합니다" 등, 비면 없음)
@@ -867,6 +872,19 @@ namespace ConsoleUI
 		bool					isVoting{ false };
 		int						iVoteSel{ VOTE_NONE };	// VOTE_NONE / VOTE_ABSTAIN / 0 ~ 6 = 자리
 		bool					isVoteDone{ false };	// Enter로 확정함 (더는 못 바꿈)
+
+		/* 처형 연출 (원탁 위를 덮는 상자) : 프레임 길이는 Scene이 정함 */
+		static constexpr int	EXEC_FRAMES{ 24 };
+		int						iExecFrame{ -1 };		// 0 ~ EXEC_FRAMES-1 = 연출 중, -1 = 아님
+		std::wstring			strExecName;			// 연행된 사람 닉네임
+		int						iExecSeat{ 0 };			// 연행된 자리 (머그샷 번호 · 머리 / 넥타이 색)
+
+		/* 게임 끝 : 승리 연출(WIN_FRAMES) → 결과 창 (iWinFrame >= WIN_FRAMES 이면 결과 창 고정) */
+		struct ResultRow { std::wstring strName; bool isMafia{ false }; bool isDead{ false }; bool isMe{ false }; };
+		static constexpr int	WIN_FRAMES{ 20 };
+		int						iWinFrame{ -1 };		// -1 = 아님
+		bool					isMafiaWin{ false };
+		std::vector<ResultRow>	vecResult;				// 앉아 있던 사람 (자리 순)
 	};
 
 	/* 한 줄 입력 (막지 않음) : Scene이 Poll_Keys(true)로 받은 키를 하나씩 넘김
@@ -956,6 +974,439 @@ namespace ConsoleUI
 			vecLines.push_back(strCur);
 			return vecLines;
 		}
+
+		/* 처형 연출 : 원탁 영역 전체를 덮는 상자 (iBoxW x iBoxH)
+		   붉은 섬광(█ ▓ ▒ ░) → 해골 깜빡임 → 문구가 두 자씩 타이핑. iFrame = 0 ~ RoomScreenView::EXEC_FRAMES - 1 */
+		/* ---- 도트 그림 : 반쪽 블록(▀ ▄) + 트루컬러(24비트) → 한 칸에 세로 픽셀 두 개 ---- */
+		struct Px { uint8_t r{ 0 }, g{ 0 }, b{ 0 }; bool isOn{ false }; };
+
+		inline Px Make_Px(int r, int g, int b, float fBright = 1.f)
+		{
+			auto C = [&](int v) { return static_cast<uint8_t>(std::clamp(static_cast<int>(v * fBright), 0, 255)); };
+			return { C(r), C(g), C(b), true };
+		}
+
+		/* CCanvas는 색을 포인터로 들고 있어서, 만든 색 문자열은 여기 모아 두고 주소를 넘김 (같은 색은 한 번만 만듦) */
+		inline const wchar_t* Intern_Color(const std::wstring& str)
+		{
+			static std::unordered_set<std::wstring> setColors;		// 노드 기반이라 원소 주소가 안 바뀜
+			return setColors.insert(str).first->c_str();
+		}
+
+		class CPixels
+		{
+		public:
+			CPixels(int iW, int iH) : m_iW{ iW }, m_iH{ iH }, m_vecPx(static_cast<size_t>(iW * iH)) {}
+
+			void Set(int x, int y, Px tPx) { if (tPx.isOn && x >= 0 && x < m_iW && y >= 0 && y < m_iH) m_vecPx[static_cast<size_t>(y * m_iW + x)] = tPx; }
+
+			/* 글자 그림 한 장을 (ox, oy)에 덮음 : '.' = 투명, 나머지 글자는 fnColor(글자)로 색을 정함 */
+			template <typename F>
+			void Blit(const wchar_t* const* pRows, int iRows, int ox, int oy, F&& fnColor)
+			{
+				for (int y = 0; y < iRows; ++y)
+					for (int x = 0; pRows[y][x]; ++x)
+						if (pRows[y][x] != L'.') Set(ox + x, oy + y, fnColor(pRows[y][x]));
+			}
+
+			/* 캔버스 (iRow, iCol)부터 : 위 픽셀 = 글자색, 아래 픽셀 = 배경색인 ▀ 한 칸 */
+			void Flush(CCanvas& tCanvas, int iRow, int iCol) const
+			{
+				for (int cy = 0; cy * 2 < m_iH; ++cy)
+					for (int x = 0; x < m_iW; ++x)
+					{
+						const Px tTop = At(x, cy * 2), tBot = (cy * 2 + 1 < m_iH) ? At(x, cy * 2 + 1) : Px{};
+						if (!tTop.isOn && !tBot.isOn) continue;
+						wchar_t wszColor[64]{};
+						if (tTop.isOn && tBot.isOn)	swprintf_s(wszColor, L"\x1b[38;2;%d;%d;%d;48;2;%d;%d;%dm", tTop.r, tTop.g, tTop.b, tBot.r, tBot.g, tBot.b);
+						else { const Px& t = tTop.isOn ? tTop : tBot; swprintf_s(wszColor, L"\x1b[38;2;%d;%d;%dm", t.r, t.g, t.b); }
+						tCanvas.Put(iRow + cy, iCol + x, tTop.isOn ? L"▀" : L"▄", Intern_Color(wszColor));
+					}
+			}
+		private:
+			Px At(int x, int y) const { return m_vecPx[static_cast<size_t>(y * m_iW + x)]; }
+
+			int				m_iW, m_iH;
+			std::vector<Px>	m_vecPx;
+		};
+
+		/* 마피아 도트 초상화 (44 x 30) : 글자 = 팔레트 (K 모자, F 피부, R 넥타이 …), '.' = 투명. 승리 초상화 · 시민 승리 머그샷이 같이 씀 */
+		inline constexpr const wchar_t* MAFIA_PORTRAIT[30] = {
+					L".............KKKKKKKKKKKKKK.................",
+					L"............KHHHHHHHHHHHHHhK................",
+					L"...........KHHHHHHHKKHHHHHHhK...............",
+					L"...........KHHHHHHHHHHHHHHHhK...............",
+					L"...........KBBBBBBBBBBBBBBBBK...............",
+					L"...........KbbbbbbbbbbbbbbbbK...............",
+					L"......KHHHHHHHHHHHHHHHHHHHHHHHHHHK..........",
+					L".....KKKKKKKKKKKKKKKKKKKKKKKKKKKKKK.........",
+					L".............SSSSSSSSSSSSSS.................",
+					L".............SSSEESSSSEESSS.................",
+					L".............SSffffffffffSS.................",
+					L".............fFFFFFffFFFFFf.................",
+					L".............fFFFFFFFFFFFFf.................",
+					L".............fFFFMMMMCCCCCCCCCO.............",
+					L".............fFFFFFFFFFFFFf.................",
+					L"..............ffffffffffff..................",
+					L"................ffffffff....................",
+					L".................SSSSSS.....................",
+					L"..........JJJJJJTTRRRRTTJJJJJJ..............",
+					L".......JJJJJJjjjjTTRRTTjjjjJJJJJJ...........",
+					L".....JJJJJJJJjjjjjTRRTjjjjjJJJJJJJJ.........",
+					L"....JJJJJJJJJJjjjjjrrjjjjjJJJJJJJJJJ........",
+					L"...JJJJJJJJJJJjjjjjRRjjjjjJJJJJJJJJJJ.......",
+					L"..JJJJJJJJJJJJjjjjjRRjjjjjJJJJJJJJJJJJ......",
+					L"..JJJJJJJJJJJJjjjjjRRjjjjjJJJJJJJJJJJJ......",
+					L"..JJJJJJJJJJJJjjjjjrrjjjjjJJJJJJJJJJJJ......",
+					L"..JJJJJJJJJJJJjjjjjjjjjjjjJJJJJJJJJJJJ......",
+					L"..JJJJJJJJJJJJjjjjjjjjjjjjJJJJJJJJJJJJ......",
+					L"..JJJJJJJJJJJJjjjjjjjjjjjjJJJJJJJJJJJJ......",
+					L"..JJJJJJJJJJJJjjjjjjjjjjjjJJJJJJJJJJJJ......" };
+
+		/* 머그샷 (46 x 32 픽셀 = 46 x 16칸) : 키 눈금 벽 앞 모자 벗은 얼굴 + 가슴 앞 번호판 → "찰칵!" 플래시 → "쾅!" 도장
+		   iRow / iLeft / iAreaW : 그림을 놓을 첫 줄 · 가로 영역 (가운데 정렬), iLook : 자리 번호 (머리 · 넥타이 색이 사람마다 다름)
+		   시민 승리("MAFIA" + 체포)와 투표 연행(이름 + 연행)이 같이 씀 */
+		inline void Draw_Mugshot(CCanvas& tCanvas, int iRow, int iLeft, int iAreaW, int iFrame,
+								 const std::wstring& strPlate1, const std::wstring& strPlate2, const std::wstring& strStamp, bool isRedStamp, int iLook)
+		{
+			static const wchar_t* const HAIR[4] = {		// 모자 대신 머리 (초상화 x 13 ~ 26, y 5 ~ 8 에 덮음)
+				L".AAAAAAAAAAAA.",
+				L"AAAAAAAAAAAAAA",
+				L"AAAAAAAAAAAAAA",
+				L"A............A" };
+			static constexpr int LOOK_HAIR[7][3] = { { 45, 34, 28 }, { 22, 22, 26 }, { 115, 72, 38 }, { 160, 128, 75 }, { 75, 48, 32 }, { 95, 95, 100 }, { 130, 45, 30 } };
+			static constexpr int LOOK_TIE[7][3]  = { { 175, 22, 32 }, { 35, 75, 155 }, { 45, 125, 65 }, { 160, 125, 35 }, { 105, 45, 135 }, { 50, 50, 55 }, { 175, 95, 35 } };
+			const int iL = (iLook >= 0 && iLook < 7) ? iLook : 0;
+
+			constexpr int ART_H = 30, PX_W = 44 + 2, PX_H = ART_H + 2;
+			constexpr int BG = 12;													// 터미널 바탕색 (번호판 글자 칸과 이어 보이게)
+			const float fBright = (std::min)(1.f, (iFrame + 1) / 6.f);
+			const bool isFlash = iFrame == 6 || iFrame == 7;						// 사진기 플래시
+			const int iShake = (iFrame == 10) ? 1 : 0;								// 도장 찍힐 때 한 칸 흔들림
+
+			/* 차가운 조명 : 채도를 반쯤 빼고 살짝 푸르게. 플래시 때는 하얗게 날아감 */
+			auto P = [&](int r, int g, int b)
+			{
+				const int iGray = (r * 30 + g * 59 + b * 11) / 100;
+				r = (r + iGray) / 2; g = (g + iGray) / 2; b = (b + iGray) / 2 + 12;
+				return isFlash ? Make_Px(r + 150, g + 150, b + 150) : Make_Px(r, g, b, fBright);
+			};
+			CPixels tPx(PX_W, PX_H);
+
+			/* 키 눈금 벽 : 4픽셀마다 선, 8픽셀마다 굵은 선 + 테두리 */
+			auto Wall = [&](int x, int y)
+			{
+				if (x == 0 || y == 0 || x == PX_W - 1 || y == PX_H - 1) return P(60, 62, 70);
+				const bool isLine = (y % 4 == 0) && (x < 8 || y % 8 == 0);			// 왼쪽 눈금은 촘촘히, 굵은 선은 끝까지
+				return isLine ? P(70, 75, 85) : P(165, 170, 180);
+			};
+			for (int y = 0; y < PX_H; ++y)
+				for (int x = 0; x < PX_W; ++x) tPx.Set(x, y, Wall(x, y));
+
+			auto Palette = [&](wchar_t ch) -> Px
+			{
+				switch (ch)
+				{
+				case L'A': return P(LOOK_HAIR[iL][0], LOOK_HAIR[iL][1], LOOK_HAIR[iL][2]);	// 머리
+				case L'S': return P(160, 110, 80);	case L'F': return P(205, 155, 115);	case L'f': return P(160, 110, 80);	// 그늘 없이 피부
+				case L'E': return P(35, 28, 28);											// 풀 죽은 눈
+				case L'M': return P(90, 45, 40);
+				case L'C': return P(205, 155, 115);										// 시가 자리 : 입 옆은 피부로
+				case L'O': return Px{};
+				case L'J': return P(28, 28, 34);		case L'j': return P(55, 55, 66);
+				case L'T': return P(225, 225, 225);
+				case L'R': return P(LOOK_TIE[iL][0], LOOK_TIE[iL][1], LOOK_TIE[iL][2]);
+				case L'r': return P(LOOK_TIE[iL][0] * 2 / 3, LOOK_TIE[iL][1] * 2 / 3, LOOK_TIE[iL][2] * 2 / 3);
+				case L'P': return Make_Px(BG, BG, BG);										// 번호판 (터미널 바탕색 그대로)
+				default:   return P(255, 0, 255);
+				}
+			};
+			tPx.Blit(MAFIA_PORTRAIT + 8, ART_H - 8, 1, 1 + 8, Palette);			// 모자 · 챙 줄(0 ~ 7)은 빼고 얼굴부터
+			tPx.Blit(HAIR, 4, 1 + 13, 1 + 5, Palette);
+			for (int x = 27; x <= 29; ++x) tPx.Set(1 + x, 1 + 13, Wall(1 + x, 1 + 13));	// 얼굴 밖으로 나와 있던 시가 자리는 벽으로
+			for (int y = 21; y <= 27; ++y)											// 번호판 (가슴 앞)
+				for (int x = 11; x <= 34; ++x) tPx.Set(x, y, Palette(L'P'));
+
+			const int iCol = iLeft + (iAreaW - PX_W) / 2 + iShake;
+			tPx.Flush(tCanvas, iRow, iCol);
+
+			/* 번호판 글자 : 픽셀 21 ~ 27 = 칸 11 ~ 13, 판 폭(24칸) 가운데 */
+			static const wchar_t* const WHITE	= L"\x1b[1;97m";
+			static const wchar_t* const GRAY	= L"\x1b[90m";
+			tCanvas.Put(iRow + 11, iCol + 11 + Center_Col(strPlate1, 24), strPlate1, isFlash ? GRAY : WHITE);
+			tCanvas.Put(iRow + 12, iCol + 11 + Center_Col(strPlate2, 24), strPlate2, GRAY);
+			if (isFlash) tCanvas.Put(iRow, iCol + 2, L"찰칵!", WHITE);
+
+			if (iFrame >= 10)														/* 도장 : 색 판에 흰 이중 테두리 (오른쪽 벽 위) */
+			{
+				const wchar_t* szStamp = isRedStamp ? L"\x1b[1;97;48;2;175;22;30m" : L"\x1b[1;97;48;2;35;65;150m";
+				const int iSR = iRow + 1, iSC = iCol + PX_W - 14;
+				tCanvas.Put(iSR,     iSC, L"╔══════════╗", szStamp);
+				tCanvas.Put(iSR + 1, iSC, L"║" + Fit(L"  " + strStamp, 10) + L"║", szStamp);
+				tCanvas.Put(iSR + 2, iSC, L"╚══════════╝", szStamp);
+				if (iFrame == 10) tCanvas.Put(iSR + 3, iSC + 4, L"쾅!", L"\x1b[1;93m");
+			}
+		}
+
+		/* 투표 연행 : 원탁 영역 전체를 덮는 상자 + 머그샷 (이름 · 자리 번호, 역할은 안 보임) + 아래 문구 */
+		inline void Draw_Arrest(CCanvas& tCanvas, int iBoxTop, int iBoxLeft, int iBoxW, int iBoxH, int iFrame, const std::wstring& strName, int iSeat)
+		{
+			static const wchar_t* const LINE = L"\x1b[1;94m";
+			tCanvas.Put(iBoxTop, iBoxLeft, L"╔" + std::wstring(iBoxW - 2, L'═') + L"╗", LINE);
+			for (int r = 1; r < iBoxH - 1; ++r) tCanvas.Put(iBoxTop + r, iBoxLeft, L"║" + std::wstring(iBoxW - 2, L' ') + L"║", LINE);
+			tCanvas.Put(iBoxTop + iBoxH - 1, iBoxLeft, L"╚" + std::wstring(iBoxW - 2, L'═') + L"╝", LINE);
+			tCanvas.Put(iBoxTop, iBoxLeft + Center_Col(L" 연  행 ", iBoxW), L" 연  행 ", LINE);
+
+			wchar_t wszNo[16]{};
+			swprintf_s(wszNo, L"No.  %03d", iSeat + 1);
+			Draw_Mugshot(tCanvas, iBoxTop + 1, iBoxLeft, iBoxW, iFrame, strName, wszNo, L"연  행", false, iSeat);
+
+			if (iFrame >= 12)
+			{
+				const std::wstring strCaption = L"─  " + strName + L" 님이 연행되었습니다  ─";
+				tCanvas.Put(iBoxTop + iBoxH - 2, iBoxLeft + Center_Col(strCaption, iBoxW), strCaption, L"\x1b[1;97m");
+			}
+		}
+
+		/* 게임 끝 : 원탁 영역 전체를 덮는 상자. 앞 WIN_FRAMES 프레임은 승리 연출, 그 뒤는 결과 창 (직업 공개) */
+		inline void Draw_Victory(CCanvas& tCanvas, int iBoxTop, int iBoxLeft, int iBoxW, int iBoxH, const RoomScreenView& tView)
+		{
+			static const wchar_t* const RED		= L"\x1b[1;91m";
+			static const wchar_t* const DRED	= L"\x1b[31m";
+			static const wchar_t* const WHITE	= L"\x1b[1;97m";
+			static const wchar_t* const SUN		= L"\x1b[1;93m";
+			static const wchar_t* const GREEN	= L"\x1b[1;92m";
+			static const wchar_t* const GRAY	= L"\x1b[90m";
+
+			const int iFrame = tView.iWinFrame;
+			const bool isMafia = tView.isMafiaWin;
+			const wchar_t* const TEAM = isMafia ? RED : GREEN;
+			const std::wstring strTitle = isMafia ? L"마 피 아   승 리" : L"시 민   승 리";
+
+			auto Put	= [&](int r, int c, const std::wstring& s, const wchar_t* sz) { tCanvas.Put(iBoxTop + r, iBoxLeft + c, s, sz); };
+			auto Center	= [&](int r, const std::wstring& s, const wchar_t* sz) { Put(r, Center_Col(s, iBoxW), s, sz); };
+
+			/* 상자 */
+			Put(0, 0, L"╔" + std::wstring(iBoxW - 2, L'═') + L"╗", TEAM);
+			for (int r = 1; r < iBoxH - 1; ++r) Put(r, 0, L"║" + std::wstring(iBoxW - 2, L' ') + L"║", TEAM);
+			Put(iBoxH - 1, 0, L"╚" + std::wstring(iBoxW - 2, L'═') + L"╝", TEAM);
+			Center(0, L" 게 임  종 료 ", TEAM);
+
+			/* ---- 결과 창 : 이긴 팀 + 전원 직업 공개 ---- */
+			if (iFrame >= RoomScreenView::WIN_FRAMES)
+			{
+				const std::wstring strBar(10, L'━');
+				Center(2, strBar + L"   " + strTitle + L"   " + strBar, TEAM);
+				int r = 5;
+				for (const RoomScreenView::ResultRow& tRow : tView.vecResult)
+				{
+					const bool isWinner = (tRow.isMafia == isMafia);
+					const wchar_t* szRow = isWinner ? WHITE : GRAY;
+					const int iCol = iBoxW / 2 - 16;
+					Put(r, iCol, tRow.isMafia ? L"🔪 마피아" : L"👤 시민", isWinner ? (tRow.isMafia ? RED : GREEN) : GRAY);
+					Put(r, iCol + 12, Fit(tRow.strName, 12), szRow);
+					if (tRow.isMe)   Put(r, iCol + 25, L"(나)", L"\x1b[1;94m");
+					if (tRow.isDead) Put(r, iCol + 30, L"사망", GRAY);
+					r += 1;
+				}
+				Center(iBoxH - 3, L"[Enter] 대기실로 돌아가기", GRAY);
+				return;
+			}
+
+			/* ---- 승리 연출 ---- */
+			const int iMid = iBoxH / 2;
+			bool isTitle{ false };
+			int iTitleRow = iMid;
+
+			/* 그림 한 줄 : 빈칸은 건너뛰고(뒤 배경 유지) 글자마다 색을 고름, 상자 테두리 밖은 안 그림 */
+			auto Art = [&](int r, int c, const std::wstring& s, auto&& fnColor)
+			{
+				for (int i = 0; i < static_cast<int>(s.size()); ++i)
+				{
+					if (s[i] == L' ' || r < 1 || r > iBoxH - 2 || c + i < 1 || c + i > iBoxW - 2) continue;
+					Put(r, c + i, std::wstring(1, s[i]), fnColor(i, s[i]));
+				}
+			};
+			auto S = [](int n) { return std::wstring(static_cast<size_t>(n), L' '); };
+			auto R = [](int n, wchar_t ch) { return std::wstring(static_cast<size_t>(n), ch); };
+
+			if (isMafia)		/* 마피아 승리 : 붉은 조명 속 중절모 마피아 도트 초상화 → 눈이 빛나고 시가 연기 → 세워 든 권총에서 "탕!" */
+			{
+				static const wchar_t* const GUN[15] = {
+					L"..GG...",
+					L"..Lg...",
+					L"..Lg...",
+					L"..Lg...",
+					L"..Lg...",
+					L"..Lg...",
+					L".GLgG..",
+					L".GLgG..",
+					L".GggG..",
+					L".GGGG..",
+					L"FFFFFf.",
+					L"FFFFFf.",
+					L"fFFFFf.",
+					L".fFFf..",
+					L".JJJJ.." };
+				constexpr int ART_H = 30, PX_W = 44 + 2, PX_H = ART_H + 2;			// 금색 테두리 1픽셀씩
+				const float fBright = (std::min)(1.f, (iFrame + 1) / 7.f);			// 어둠 속에서 서서히 드러남
+				const bool isEyeOn = iFrame >= 7 && iFrame % 2 == 1;
+				const bool isFlash = iFrame == 9 || iFrame == 10 || iFrame == 13 || iFrame == 14;
+				auto P = [&](int r, int g, int b) { return Make_Px(r, g, b, isFlash ? 1.5f : fBright); };	// 총 쏠 때 그림 전체가 번쩍
+				CPixels tPx(PX_W, PX_H);
+
+				/* 액자 + 붉은 조명 배경 (가운데 밝고 가장자리로 갈수록 어둡게) */
+				for (int y = 0; y < PX_H; ++y)
+					for (int x = 0; x < PX_W; ++x)
+					{
+						if (x == 0 || y == 0 || x == PX_W - 1 || y == PX_H - 1) { tPx.Set(x, y, P(200, 160, 60)); continue; }
+						const float dx = (x - PX_W / 2.f) / (PX_W / 2.f), dy = (y - PX_H * 0.45f) / (PX_H / 2.f);
+						const float t = (std::min)(1.f, std::sqrt(dx * dx + dy * dy));
+						tPx.Set(x, y, P(static_cast<int>(125 - 105 * t), static_cast<int>(20 - 17 * t), static_cast<int>(20 - 17 * t)));
+					}
+
+				auto Palette = [&](wchar_t ch) -> Px
+				{
+					switch (ch)
+					{
+					case L'K': return P(22, 22, 28);		case L'H': return P(48, 48, 58);		case L'h': return P(85, 85, 100);	// 모자
+					case L'B': return P(150, 25, 25);		case L'b': return P(100, 15, 15);										// 모자 띠
+					case L'S': return P(70, 45, 35);		case L'F': return P(205, 155, 115);		case L'f': return P(160, 110, 80);	// 그늘 · 피부
+					case L'E': return isEyeOn ? P(255, 50, 40) : P(140, 20, 20);													// 눈
+					case L'M': return P(60, 28, 22);		case L'C': return P(115, 65, 35);											// 입 · 시가
+					case L'O': return (iFrame % 2) ? P(255, 170, 40) : P(255, 90, 20);												// 불씨
+					case L'J': return P(28, 28, 34);		case L'j': return P(55, 55, 66);											// 양복
+					case L'T': return P(225, 225, 225);	case L'R': return P(175, 22, 32);		case L'r': return P(115, 12, 22);	// 셔츠 · 넥타이
+					case L'G': return P(40, 40, 46);		case L'g': return P(120, 125, 135);		case L'L': return P(200, 205, 215);	// 권총
+					default:   return P(255, 0, 255);
+					}
+				};
+				tPx.Blit(MAFIA_PORTRAIT, ART_H, 1, 1, Palette);
+				tPx.Blit(GUN, 15, 1 + 3, 1 + 4, Palette);
+
+				if (iFrame >= 5)															// 시가 연기 : 불씨에서 위로 구불구불
+					for (int k = 1; k <= 5; ++k)
+						tPx.Set(1 + 30 + ((k + iFrame) % 3 == 0 ? 1 : 0) + k / 3, 1 + 13 - k, k <= 2 ? P(170, 170, 170) : P(105, 105, 105));
+
+				if (isFlash)																// 총구 섬광
+				{
+					const int mx = 1 + 3 + 2, my = 1 + 4 - 1;
+					tPx.Set(mx, my, Make_Px(255, 255, 255));				tPx.Set(mx + 1, my, Make_Px(255, 255, 255));
+					tPx.Set(mx, my - 1, Make_Px(255, 230, 120));			tPx.Set(mx + 1, my - 1, Make_Px(255, 230, 120));
+					tPx.Set(mx - 1, my - 1, Make_Px(255, 160, 40));		tPx.Set(mx + 2, my - 1, Make_Px(255, 160, 40));
+					tPx.Set(mx - 2, my - 2, Make_Px(255, 120, 30));		tPx.Set(mx + 3, my - 2, Make_Px(255, 120, 30));
+				}
+
+				const int iCol = (iBoxW - PX_W) / 2;
+				tPx.Flush(tCanvas, iBoxTop + 1, iBoxLeft + iCol);
+				if (isFlash) Put(1, iCol + 9, L"탕!", RED);
+				isTitle = iFrame >= 11;
+				iTitleRow = iBoxH - 2;
+			}
+			else				/* 시민 승리 : 신문이 빙글 돌며 날아옴 → "마피아 검거!" 1면에 바랜 사진 */
+			{
+				constexpr int PX_W = 46, PX_H = 32;
+				static const int SPIN_W[6] = { 4, 18, 46, 18, 4, 30 };					// 돌아가는 동안 보이는 폭 (3 · 4번째는 뒷면)
+				const bool isSpin = iFrame < 6;
+				const bool isBack = iFrame == 3 || iFrame == 4;
+				const int iW = isSpin ? SPIN_W[iFrame] : PX_W;
+				const int iShake = (iFrame == 6) ? 1 : 0;
+
+				CPixels tPx(iW, PX_H);
+				for (int y = 0; y < PX_H; ++y)												// 종이 (가장자리는 누렇게)
+					for (int x = 0; x < iW; ++x)
+					{
+						const bool isEdge = x == 0 || y == 0 || x == iW - 1 || y == PX_H - 1;
+						tPx.Set(x, y, isBack ? Make_Px(175, 165, 140) : (isEdge ? Make_Px(200, 188, 155) : Make_Px(228, 218, 190)));
+					}
+
+				if (!isSpin)																// 사진 : 모자 쓴 마피아, 세피아 색
+				{
+					auto Sepia = [](int r, int g, int b)
+					{
+						const int iLum = (r * 30 + g * 59 + b * 11) / 100;
+						return Make_Px(iLum * 107 / 100 + 22, iLum * 95 / 100 + 12, iLum * 75 / 100);
+					};
+					for (int y = 12; y < 30; ++y) for (int x = 3; x < 27; ++x) tPx.Set(x, y, Sepia(150, 140, 120));
+					auto Palette = [&](wchar_t ch) -> Px
+					{
+						switch (ch)
+						{
+						case L'K': return Sepia(22, 22, 28);	case L'H': return Sepia(48, 48, 58);	case L'h': return Sepia(85, 85, 100);
+						case L'B': case L'b': return Sepia(60, 30, 30);
+						case L'S': return Sepia(70, 45, 35);	case L'F': return Sepia(205, 155, 115);	case L'f': return Sepia(160, 110, 80);
+						case L'E': return Sepia(20, 20, 20);	case L'M': return Sepia(60, 28, 22);
+						case L'C': return Sepia(115, 65, 35);	case L'O': return Sepia(230, 230, 230);
+						case L'J': return Sepia(28, 28, 34);	case L'j': return Sepia(55, 55, 66);
+						case L'T': return Sepia(225, 225, 225);	case L'R': case L'r': return Sepia(90, 30, 30);
+						default:   return Px{};
+						}
+					};
+					static const wchar_t* PHOTO[18];											// 초상화 위 18줄, 가운데 24칸만 (모자 ~ 목)
+					static std::wstring arrCrop[18];
+					for (int y = 0; y < 18; ++y) { arrCrop[y] = std::wstring(MAFIA_PORTRAIT[y]).substr(8, 24); PHOTO[y] = arrCrop[y].c_str(); }
+					tPx.Blit(PHOTO, 18, 3, 12, Palette);
+				}
+
+				const int iCol = (iBoxW - iW) / 2 + iShake;
+				tPx.Flush(tCanvas, iBoxTop + 1, iBoxLeft + iCol);
+
+				if (!isSpin)																// 글자 : 종이색 바탕 위에
+				{
+					static const wchar_t* const INK		= L"\x1b[38;2;35;30;25;48;2;228;218;190m";
+					static const wchar_t* const INK_B	= L"\x1b[1;38;2;35;30;25;48;2;228;218;190m";
+					static const wchar_t* const INK_RED	= L"\x1b[1;38;2;150;20;20;48;2;228;218;190m";
+					static const wchar_t* const INK_DIM	= L"\x1b[38;2;110;100;85;48;2;228;218;190m";
+					auto Text = [&](int r, int c, const std::wstring& s, const wchar_t* sz) { tCanvas.Put(iBoxTop + 1 + r, iBoxLeft + iCol + c, s, sz); };
+					auto TextC = [&](int r, const std::wstring& s, const wchar_t* sz) { Text(r, Center_Col(s, PX_W), s, sz); };
+					TextC(1, L"━━━━━━  마 을 일 보  ━━━━━━", INK_B);
+					Text(2, 2, std::wstring(PX_W - 4, L'─'), INK_DIM);
+					TextC(3, L"마 피 아   검 거 !", INK_RED);
+					TextC(4, L"시민 투표로 정체 드러나", INK_DIM);
+					Text(5, 2, std::wstring(PX_W - 4, L'─'), INK_DIM);
+					static const wchar_t* const BODY[7] = { L"3일 밤낮 마을을", L"공포에 떨게 한", L"마피아가 마침내", L"시민들의 투표로", L"붙잡혔다.", L"", L"- 마을 경찰서 -" };
+					for (int k = 0; k < 7; ++k) Text(7 + k, 29, BODY[k], k == 6 ? INK_DIM : INK);
+				}
+				if (iFrame == 6) Put(1, iCol + PX_W - 4, L"탁!", SUN);
+				isTitle = iFrame >= 10;
+				iTitleRow = iBoxH - 2;
+			}
+
+			if (isTitle)
+			{
+				const std::wstring strBand = L"      " + strTitle + L"      ";
+				Center(iTitleRow, strBand, isMafia ? L"\x1b[1;97;41m" : L"\x1b[1;97;42m");	/* 띠 : 빨강 / 초록 바탕에 흰 글자 */
+			}
+		}
+
+		inline void Draw_Execution(CCanvas& tCanvas, int iBoxTop, int iBoxLeft, int iBoxW, int iBoxH, int iFrame, const std::wstring& strName)
+		{
+			static const wchar_t* const RED		= L"\x1b[1;91m";
+			static const wchar_t* const DRED	= L"\x1b[31m";
+
+			/* 상자 : 테두리 + 안을 덮어 원탁 · 의자를 통째로 가림 (섬광 프레임은 안을 채움) */
+			static const wchar_t FILL[4] = { L'█', L'▓', L'▒', L'░' };
+			const wchar_t chFill = (iFrame < 4) ? FILL[iFrame] : L' ';
+			tCanvas.Put(iBoxTop, iBoxLeft, L"╔" + std::wstring(iBoxW - 2, L'═') + L"╗", RED);
+			for (int r = 1; r < iBoxH - 1; ++r) tCanvas.Put(iBoxTop + r, iBoxLeft, L"║" + std::wstring(iBoxW - 2, chFill) + L"║", RED);
+			tCanvas.Put(iBoxTop + iBoxH - 1, iBoxLeft, L"╚" + std::wstring(iBoxW - 2, L'═') + L"╝", RED);
+			tCanvas.Put(iBoxTop, iBoxLeft + Center_Col(L" 처  형 ", iBoxW), L" 처  형 ", RED);
+			if (iFrame < 4) return;
+
+			static const wchar_t* const SKULL[6] = {
+				L"  ▄██████████▄  ",
+				L" ██████████████ ",
+				L" ██    ██    ██ ",
+				L" ███▄▄████▄▄███ ",
+				L"  ▀████▀▀████▀  ",
+				L"    █▀█▀█▀█▀    " };
+			const int iTop = iBoxTop + (iBoxH - 11) / 2;		// 해골 6줄 + 빈 줄 3 + 문구 1 + 여유 1을 세로 가운데
+			for (int k = 0; k < 6; ++k) tCanvas.Put(iTop + k, iBoxLeft + Center_Col(SKULL[k], iBoxW), SKULL[k], (iFrame % 2 == 0) ? RED : DRED);
+
+			const std::wstring strCaption = L"─  " + strName + L" 님이 처형되었습니다  ─";
+			const size_t iTyped = static_cast<size_t>((std::max)(0, iFrame - 6) * 2);	// 한 프레임에 두 글자
+			tCanvas.Put(iTop + 9, iBoxLeft + Center_Col(strCaption, iBoxW), strCaption.substr(0, (std::min)(iTyped, strCaption.size())), RED);
+		}
 	}
 
 	/* 방 화면 : 왼쪽 원탁(7석) + 오른쪽 채팅 + 아래 입력 줄
@@ -963,7 +1414,7 @@ namespace ConsoleUI
 	inline void Render_Room(const RoomScreenView& tView)
 	{
 		using namespace Color;
-		constexpr int AREA_W = 66, TABLE_AREA_H = 17;	// 원탁 영역 (원탁 자체는 17줄)
+		constexpr int AREA_W = 66, TABLE_AREA_H = 19;	// 원탁 영역 (의자 17줄 + 위 직업 1줄 + 아래 표 수 1줄)
 		constexpr int CHAIR_W = 16;						// 의자 바깥 폭 (이름 칸 14 = "★ " + 한글 6자)
 		constexpr int TABLE_COL = 18, TABLE_W = 30, TABLE_H = 9;
 
@@ -973,7 +1424,7 @@ namespace ConsoleUI
 		const int AREA_H  = (std::max)(TABLE_AREA_H, iRows - 9);
 		const int CHAT_W  = (std::max)(36, iCols - AREA_W - 7);		// 채팅 박스 안쪽 폭
 		const int TOTAL_W = AREA_W + 2 + CHAT_W + 2;
-		const int iTop    = (AREA_H - TABLE_AREA_H) / 2;				// 원탁은 세로 가운데
+		const int iTop    = (AREA_H - TABLE_AREA_H) / 2 + 1;			// 원탁은 세로 가운데 (1번 의자 위 직업 줄만큼 한 칸 내림)
 		const int TABLE_ROW = iTop + 4;
 
 		static const wchar_t* const ME		= L"\x1b[1;94m";	// 나 : 파랑
@@ -1005,8 +1456,10 @@ namespace ConsoleUI
 		};
 		if (tView.isPlaying)
 		{
-			Table_Text(3, (tView.isNight ? L"밤" : L"낮") + std::wstring(L"  ·  ") + std::to_wstring(tView.iDay) + L"일차", tView.isNight ? NIGHT : DAY);
-			if (!tView.strSub.empty()) Table_Text(5, tView.strSub, NAME);
+			const int iShift = tView.strTally.empty() ? 0 : -1;		// 셋째 줄이 있으면 한 줄씩 위로 (2 · 4 · 6)
+			Table_Text(3 + iShift, (tView.isNight ? L"밤" : L"낮") + std::wstring(L"  ·  ") + std::to_wstring(tView.iDay) + L"일차", tView.isNight ? NIGHT : DAY);
+			if (!tView.strSub.empty())		Table_Text(5 + iShift, tView.strSub, NAME);
+			if (!tView.strTally.empty())	Table_Text(6, tView.strTally, Yellow);
 		}
 		else
 		{
@@ -1035,7 +1488,9 @@ namespace ConsoleUI
 			const wchar_t* szName = tSeat.isDead ? Gray : (tSeat.isMe ? ME : NAME);
 			const wchar_t* szLine = isPick ? L"\x1b[1;91m" : (tSeat.isDead ? Gray : (tSeat.isMe ? ME : L"\x1b[37m"));
 			const wchar_t  H = isPick ? L'═' : L'─', V = isPick ? L'║' : L'│';
-			const std::wstring strName = (tSeat.isMaster ? L"★ " : L"") + tSeat.strName;	// ★는 터미널에서 1칸보다 넓게 그려져 뒤에 한 칸 띄움
+			const bool isSkull = tSeat.isDead;								// 죽으면 ★ 대신 ☠
+			const bool isMark = isSkull || tSeat.isMaster;
+			const std::wstring strName = (isMark ? L"★ " : L"") + tSeat.strName;	// 표시 기호(★ / ☠)는 터미널에서 1칸보다 넓게 그려져 뒤에 한 칸 띄움
 			const std::wstring strFit = Fit(strName, CHAIR_W - 2);			// 길면 자름
 			const int iNameW = (std::min)(Width(strName), CHAIR_W - 2);
 
@@ -1045,22 +1500,33 @@ namespace ConsoleUI
 
 			tCanvas.Put(iRow + 1, iCol, V + Spaces(CHAIR_W - 2) + V, szLine);
 			const int iNameCol = iCol + 1 + (CHAIR_W - 2 - iNameW) / 2;
-			if (tSeat.isMaster)
+			if (isMark)
 			{
-				tCanvas.Put(iRow + 1, iNameCol, L"★", Yellow);
-				tCanvas.Put(iRow + 1, iNameCol + 2, strFit.substr(2, strFit.find_last_not_of(L' ') - 1), szName);
+				tCanvas.Put(iRow + 1, iNameCol, isSkull ? L"☠" : L"★", isSkull ? szName : Yellow);
+				tCanvas.Put(iRow + 1, iNameCol + (isSkull ? 3 : 2), strFit.substr(2, strFit.find_last_not_of(L' ') - 1), szName);
 			}
 			else
 				tCanvas.Put(iRow + 1, iNameCol, strFit.substr(0, strFit.find_last_not_of(L' ') + 1), szName);
 
-			/* 아래 테두리 : 태그가 있으면 └─투표 2──┘ */
 			tCanvas.Put(iRow + 2, iCol, (isPick ? L"╚" : L"└") + std::wstring(CHAIR_W - 2, H) + (isPick ? L"╝" : L"┘"), szLine);
-			if (!tSeat.strTag.empty())
+
+			/* 의자 위 : 직업 / 의자 아래 : 투표 : N 표 (둘 다 의자 폭 가운데) */
+			if (!tSeat.strRole.empty())
+				tCanvas.Put(iRow - 1, iCol + Detail::Center_Col(tSeat.strRole, CHAIR_W), tSeat.strRole, tSeat.isDead ? Gray : (tSeat.isRoleRed ? L"\x1b[1;91m" : L"\x1b[1;92m"));
+			if (tSeat.iVotes >= 0)
 			{
-				const std::wstring strTag = Fit(tSeat.strTag, CHAIR_W - 4);
-				tCanvas.Put(iRow + 2, iCol + 2, strTag.substr(0, strTag.find_last_not_of(L' ') + 1), tSeat.isDead ? Gray : Yellow);
+				const std::wstring strVotes = L"투표 : " + std::to_wstring(tSeat.iVotes) + L" 표";
+				tCanvas.Put(iRow + 3, iCol + Detail::Center_Col(strVotes, CHAIR_W), strVotes, tSeat.iVotes > 0 ? Yellow : Gray);
 			}
 		}
+
+		/* 처형 연출 : 원탁 위를 통째로 덮음 */
+		if (tView.iExecFrame >= 0)
+			Detail::Draw_Arrest(tCanvas, iTop - 1, 0, AREA_W, TABLE_AREA_H, tView.iExecFrame, tView.strExecName, tView.iExecSeat);
+
+		/* 게임 끝 : 승리 연출 → 결과 창 (처형 연출보다 위) */
+		if (tView.iWinFrame >= 0)
+			Detail::Draw_Victory(tCanvas, iTop - 1, 0, AREA_W, TABLE_AREA_H, tView);
 
 		/* ---- 채팅 : 화면에 들어가는 줄만 끝에서부터 ---- */
 		const int CHAT_ROWS = AREA_H - 2, TEXT_W = CHAT_W - 2;

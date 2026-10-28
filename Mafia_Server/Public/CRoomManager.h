@@ -35,6 +35,7 @@ namespace MafiaServer
 		Protocol::ROOM_KEY	Exit_Room(Net::ClientKey iExitPlayerClientKey);
 		void				Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer);
 		void				Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, uint8_t iSeat);
+		void				LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is);
 
 		/* 게임 시작 승인된 방 : 로딩(카운트다운) 시작 */
 		bool				Start_Loading(Protocol::ROOM_KEY iRoomKey, ULONGLONG ullNow);

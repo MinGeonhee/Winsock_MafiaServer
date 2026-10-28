@@ -53,7 +53,7 @@ namespace Protocol
 	{
 		Protocol::GAME_PHASE	eCurPhase{Protocol::GAME_PHASE::END};	/* 현재 Phase */
 		uint16_t				iDay{0};								/* 몇일째 인지 */
-		uint32_t				iRemainMs{ 0 };							/* 현재 Phase 제한시간 */
+		uint64_t				iRemainMs{ 0 };							/* 현재 Phase 제한시간 */
 		uint8_t					iAliveMask{ 0 };						/* 비트 i = i번 자리 생존 (화면용 : 죽은 의자 회색 · 투표 후보) */
 	};
 
@@ -73,12 +73,26 @@ namespace Protocol
 		uint8_t		iSeat{ NONE_SEAT };
 	};
 
+	/* 서버 → 클라 : Last Vote 단계 끝 방 전원에게 처형될 대상 자리 와 최종 투표결과 알려주기 */
+	struct S_TO_C_LASTVOTE_RESULT
+	{
+		uint8_t		iSeat{ NONE_SEAT };
+	};
+
 	/* 클라 → 서버 : LAST_VOTE 단계 찬반 (찬성 = 처형) */
 	struct C_TO_S_LAST_VOTE
 	{
-		bool		isAgree{ false };
+		Protocol::ROOM_KEY		iRoomKey{Protocol::NONE_ROOMKEY};
+		bool					isAgree{ false };
 	};
 
+
+	struct S_TO_C_GAME_END
+	{
+		ENDGAME_RESULT  eWinner{ ENDGAME_RESULT::NONE };
+		JOB             arrJobs[MAX_ROOM_PLAYER]{};     /* 자리별 직업 공개 (빈자리 = UNKNOWN) */
+		uint8_t         iAliveMask{ 0 };                /* 마지막 생존 상태 (결과 창에 ☠ 표시용) */
+	};
 
 	/* 방 자리 바뀜 : 방장 + 자리 7칸 (빈자리는 iKey 0) */
 	struct S_TO_C_ROOM_MEMBERS
@@ -159,6 +173,18 @@ namespace Protocol
 	{
 		uint16_t		iCount{ 0 };
 		LOBBY_ROOM		arr[MAX_ROOM_PACKET_COUNT]{};
+	};
+
+	struct GAME_LASTVOTE : PROVIDE_DATA
+	{
+		bool			is{false};
+	};
+
+	struct GAME_VOTE : PROVIDE_DATA
+	{
+		/* 투표된 자리 */
+		INT32			iVoteSeat{};
+		INT32			iCount{};
 	};
 
 	/* 채팅 로그 보내기 */

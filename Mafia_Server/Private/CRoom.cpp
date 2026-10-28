@@ -30,6 +30,11 @@ namespace MafiaServer
 		{
 			/* 결과가 먼저 가야 클라가 최후 변론 단계에서 지목된 사람을 앎 */
 			if (ePrev == Protocol::GAME_PHASE::VOTE) Send_VoteResult();
+			if (ePrev == Protocol::GAME_PHASE::LAST_VOTE) Send_LastVoteResult();	/* 처형 연출이 먼저 */
+
+			/* 승패가 났으면 단계 알림 대신 게임 끝 (m_pLogic을 지우므로 바로 나감) */
+			if (m_pLogic->Get_Phase() == Protocol::GAME_PHASE::GAME_RESULT) { End_Game(); return; }
+
 			Send_ChangePhase(ullNow);
 		}
 	}
@@ -48,6 +53,11 @@ namespace MafiaServer
 	{
 		m_eCurState = CRoom::STATE::LOADING;		/* 이때부터 입장 막힘 (Enter가 WATING만 받음) */
 		m_ullLoadingStart = ullNow;
+	}
+
+	Protocol::ENDGAME_RESULT CRoom::Judge_EndGame()
+	{
+		return m_pLogic ? m_pLogic->Judge_EndGame() : Protocol::ENDGAME_RESULT::NONE;
 	}
 
 	void CRoom::Start_Game(ULONGLONG ullNow)
@@ -206,7 +216,37 @@ namespace MafiaServer
 	void CRoom::Vote(Net::ClientKey iVoterKey, uint8_t iSeat)
 	{
 		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return;
-		m_pLogic->Vote(Find_Seat(iVoterKey), iSeat == Protocol::NONE_SEAT ? -1 : iSeat);
+		if (m_pLogic->Vote(Find_Seat(iVoterKey), iSeat == Protocol::NONE_SEAT ? -1 : iSeat) == false) return;
+
+		Protocol::GAME_VOTE tData{};
+		tData.eDataType = Protocol::DATA_TYPE::GAME_VOTE;
+		tData.iCount = m_pLogic->Get_SeatVoteCount(iSeat);
+		tData.iVoteSeat = iSeat;
+
+		/* 찬반 투표가 진행될 때마다 발송 */
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, &tData, sizeof(tData));
+		}
+	}
+
+	void CRoom::LastVote(Net::ClientKey iVoterKey, bool is)
+	{
+		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return;
+		if (m_pLogic->LastVote(Find_Seat(iVoterKey), is) == false) return;
+
+
+		Protocol::GAME_LASTVOTE tData{};
+		tData.eDataType = Protocol::DATA_TYPE::GAME_LASTVOTE;
+		tData.is = is;
+
+		/* 찬반 투표가 진행될 때마다 발송 */
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			m_pServerApp->Send_Packet( Key, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, &tData, sizeof(tData));
+		}
 	}
 
 	int CRoom::Find_Seat(Net::ClientKey iKey) const
@@ -228,6 +268,40 @@ namespace MafiaServer
 			if (Key == Net::NONE_CLIENTKEY) continue;
 			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_VOTE_RESULT, tBody);
 		}
+	}
+
+	void CRoom::Send_LastVoteResult()
+	{
+		Protocol::S_TO_C_LASTVOTE_RESULT tBody{};
+		const int iSeat = m_pLogic->Get_ExecutedSeat();
+		if (iSeat >= 0) tBody.iSeat = static_cast<uint8_t>(iSeat);
+
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_LASTVOTE_RESULT, tBody);
+		}
+	}
+
+	void CRoom::End_Game()
+	{
+		Protocol::S_TO_C_GAME_END tBody{};
+		tBody.eWinner		= m_pLogic->Get_Winner();
+		tBody.iAliveMask	= m_pLogic->Get_AliveMask();
+		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+		{
+			if (m_arrayPlayerClientKeys[i] == Net::NONE_CLIENTKEY) continue;
+			tBody.arrJobs[i]		= m_pLogic->Is_Mafia(i) ? Protocol::JOB::MAFIA : Protocol::JOB::CITIZEN;
+			m_arrViewingResult[i]	= true;		/* 결과 창 확인 전엔 F5 막기 */
+		}
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_GAME_END, tBody);
+		}
+
+		m_pLogic.reset();							/* 게임 정리 */
+		m_eCurState = CRoom::STATE::WATING;			/* 다시 입장 · F5 가능 */
 	}
 
 	void CRoom::SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen  ,Net::CServer* pMainServer) const

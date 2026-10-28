@@ -85,6 +85,13 @@ namespace MafiaServer
 		iter->second->Vote(iVoterKey, iSeat);
 	}
 
+	void CRoomManager::LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is)
+	{
+		auto iter = m_umapRooms.find(iRoomKey);
+		if (iter == m_umapRooms.end()) return;
+		iter->second->LastVote(iVoterKey,is);
+	}
+
 	bool CRoomManager::Start_Loading(Protocol::ROOM_KEY iRoomKey, ULONGLONG ullNow)
 	{
 		auto iter = m_umapRooms.find(iRoomKey);

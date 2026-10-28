@@ -29,7 +29,7 @@ namespace MafiaServer
 		void	Late_Update(ULONGLONG ullNow);
 
 		Protocol::GAME_PHASE	Get_Phase()		const { return m_eCurPhase; }
-		ULONGLONG				Get_Day()		const { return m_iDay; }
+		uint16_t				Get_Day()		const { return m_iDay; }
 		/* 이번 State 남은 시간 (ms, 지났으면 0) : 클라에 알릴 때 */
 		ULONGLONG				Get_Remain(ULONGLONG ullNow) const;
 		/* 지금 단계에 이 자리가 채팅할 수 있나 (토론 : 전원 / 최후 변론 : 지목된 사람만 / 나머지 : 불가) */
@@ -44,8 +44,16 @@ namespace MafiaServer
 			return iMask;
 		}
 
+		void							Kill(INT32 iSeat, INT32 iKillerSeat = Protocol::NONE_SEAT);
+		Protocol::ENDGAME_RESULT		Judge_EndGame();
+		INT32							Get_SeatVoteCount(INT32 iSeat);
+		INT32							Get_ExecutedSeat() const { return m_iExecutedSeat; }
+		Protocol::ENDGAME_RESULT		Get_Winner() const { return m_eEndGameResult; }	/* GAME_RESULT로 넘어갈 때 정해진 이긴 팀 */
+		INT32							Get_LastVote(INT32 iSeat);
+		INT32							Get_LastVoteResult();
 		/* VOTE 단계에 iVoter 자리가 iTarget 자리에 투표 (-1 = 무효표). 다시 오면 덮어씀. 자기 자신 · 죽은 사람 · 빈자리는 거부 */
 		bool					Vote(int iVoter, int iTarget);
+		bool					LastVote(int iVoter, bool is);
 	private:
 		void					Change_Phase(ULONGLONG ullNow);	/* 다음 State로 */
 		void					Start_Phase(Protocol::GAME_PHASE ePhase, ULONGLONG ullNow);	/* 이 State 시작 : 시작 시각 · 제한 시간 기록 */
@@ -57,14 +65,15 @@ namespace MafiaServer
 		Protocol::GAME_PHASE	m_eCurPhase;		/* 현재 Phase */
 		ULONGLONG				m_iCurStateTime;	/* 현재 Phase가 시작된 시각 (ms) */
 		ULONGLONG				m_iCurStateLen;		/* 현재 Phase 제한시간 (ms) */
-		ULONGLONG				m_iDay;				/* 진행 차수 */
+		uint16_t				m_iDay;				/* 진행 차수 */
 
 		/* 투표 : 인덱스 = 자리 번호(0 ~ 6, 방의 m_arrayPlayerClientKeys와 같은 순서) */
-		std::array<int, Protocol::MAX_ROOM_PLAYER>	m_arrVote;		/* 자리별로 "누구를 골랐나" (-1 = 안 고름) */
-		std::array<bool, Protocol::MAX_ROOM_PLAYER>	m_arrAlive;		/* 자리별 생존 (빈자리 = false) */
-		int											m_iAccusedSeat{ -1 };	/* 투표로 지목된 자리 (최후 변론자, -1 = 없음) */
-		int											m_iMafiaSeat{ -1 };
-
+		std::array<int, Protocol::MAX_ROOM_PLAYER>	m_arrVote;				/* 자리별로 "누구를 골랐나" (-1 = 안 고름) */
+		std::array<bool, Protocol::MAX_ROOM_PLAYER>	m_arrAlive;				/* 자리별 생존 (빈자리 = false) */
+		INT32										m_iAccusedSeat;	/* 투표로 지목된 자리 (최후 변론자, -1 = 없음) */
+		INT32										m_iMafiaSeat;
+		INT32										m_iExecutedSeat;
+		Protocol::ENDGAME_RESULT					m_eEndGameResult;
 
 		/* Mafia 및 Room키 관리  */
 		Protocol::ROOM_KEY	m_iRoomKey;

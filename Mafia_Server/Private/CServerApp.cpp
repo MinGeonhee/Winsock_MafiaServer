@@ -274,6 +274,17 @@ namespace MafiaServer
 			break;
 		}
 #pragma endregion
+		case Protocol::PACKET_TYPE::C_TO_S_LAST_VOTE:
+		{
+#pragma region 최후의 투표 처리
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::C_TO_S_LAST_VOTE)) break;
+			const Protocol::C_TO_S_LAST_VOTE* pBody = reinterpret_cast<const Protocol::C_TO_S_LAST_VOTE*>(tEvent.Get_Body());
+			if (pBody == nullptr) break;
+			
+			m_pRoomManager->LastVote(pBody->iRoomKey, tEvent.iKey, pBody->isAgree);
+			break;
+#pragma endregion
+		}
 		case Protocol::PACKET_TYPE::END:			break;
 		default:									break;
 		}

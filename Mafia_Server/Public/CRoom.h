@@ -58,6 +58,8 @@ namespace MafiaServer
 		/* 시작 승인 : 로딩(카운트다운) 시작. START_COUNTDOWN_MS 뒤 Update에서 게임으로 */
 		void				Start_Loading(ULONGLONG ullNow);
 	public:
+		Protocol::ENDGAME_RESULT Judge_EndGame();
+
 		/* 방 참여 신청 받기 */
 		ENTER_RESULT	Enter(Net::ClientKey iEnterPlayerClientKey);
 		void			Exit(Net::ClientKey iExitPlayerClientKey);
@@ -72,6 +74,7 @@ namespace MafiaServer
 
 		/* 투표 : 보낸 사람 자리를 찾아 로직에 넘김 (iSeat = NONE_SEAT 이면 무효표) */
 		void			Vote(Net::ClientKey iVoterKey, uint8_t iSeat);
+		void			LastVote(Net::ClientKey iVoterKey, bool is);
 
 		/* 방안의 모든 사람에게 패킷보내기 */
 		void			SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen, Net::CServer* pMainServer) const;
@@ -80,6 +83,8 @@ namespace MafiaServer
 		void			Change_Master();
 		void			Send_ChangePhase(ULONGLONG uillNow);
 		void			Send_VoteResult();						/* VOTE 끝 : 지목된 자리 방 전원에게 */
+		void			Send_LastVoteResult();					/* VOTE 끝 : 지목된 자리 방 전원에게 */
+		void			End_Game();								/* GAME_RESULT : 이긴 팀 + 직업 공개 전송 → 게임 정리 → 대기로 */
 		int				Find_Seat(Net::ClientKey iKey) const;	/* 없으면 -1 */
 		void			Start_Game(ULONGLONG ullNow);		/* 로딩 끝 : 게임 상태 + 게임 로직 생성 */
 	public:
@@ -93,6 +98,7 @@ namespace MafiaServer
 
 		uint16_t			m_iCurPlayerNum;
 		std::array< Net::ClientKey , Protocol::MAX_ROOM_PLAYER > m_arrayPlayerClientKeys;
+		std::array< bool, Protocol::MAX_ROOM_PLAYER >	m_arrViewingResult{};	/* 자리별 : 게임 결과 창 보는 중 (확인 전엔 F5 막기용) */
 		std::unique_ptr<CChatting>		m_pChatting;
 		std::unique_ptr<CMafiaLogic>	m_pLogic;		/* 게임 중일 때만 (게임 시작에 만들고 끝나면 reset) */
 		ULONGLONG						m_ullLoadingStart{ 0 };	/* 로딩(카운트다운) 시작 시각 */

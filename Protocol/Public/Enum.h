@@ -34,6 +34,14 @@ namespace Protocol
 		END
 	};
 
+	enum class ENDGAME_RESULT : uint8_t
+	{
+		NONE	= 0,	/* 아직 판가름 나지 않음 */
+		MAFIA ,			/* 마피아팀의 승리 */
+		CITIZEN,		/* 시민팀의 승리 */
+		END,
+	};
+
 	enum class GAME_PHASE : uint8_t
 	{
 		NIGHT = 0,		/* 밤 */
@@ -43,6 +51,7 @@ namespace Protocol
 		ALLOCUTION,		/* 최후의 변론 시간 */
 		LAST_VOTE,		/* 최종 찬반 투표 */
 		LOADING_NIGHT,	/* 밤 되기전 잠깐의 시간 */
+		GAME_RESULT,	/* 밤 되기전 잠깐의 시간 */
 		END
 	};
 
@@ -83,16 +92,20 @@ namespace Protocol
 		S_TO_C_STARTGAME,					// 서버->클라 실제 게임 시작 (5초 뒤 서버가 재확인 후, 사람마다 자기 직업 포함)
 		S_TO_C_CHANGEPHASE,					// 서버->클라 페이지 교체
 		C_TO_S_VOTE,						// 클라->서버 투표 (VOTE 단계, 고른 자리)
+		C_TO_S_LAST_VOTE,					// 클라->서버 최수의 투표 (LAST_VOTE 단계)
 		S_TO_C_VOTE_RESULT,					// 서버->클라 투표 결과 (처형 대상 자리, 없으면 NONE_SEAT) → 방 전원
-		C_TO_S_LAST_VOTE,					// 클라->서버 찬반 투표 (LAST_VOTE 단계)
+		S_TO_C_LASTVOTE_RESULT,				// 클라->서버 찬반 투표 (LAST_VOTE 단계)
+		S_TO_C_GAME_END,					// 클라->서버 찬반 투표 (LAST_VOTE 단계)
 		END
 	};
 
 	enum class DATA_TYPE : uint16_t
 	{
 		LOBBY_PLAYERS = 0,		// 로비 접속자 목록
-		LOBBY_ROOMS   = 1,		// 로비 방 목록
-		CHAT_LOG	  = 2,		// 방 채팅 한 줄 (LOBBY_ROOMS와 번호가 겹치면 받는 쪽에서 구분 못 함)
+		LOBBY_ROOMS,			// 로비 방 목록
+		CHAT_LOG,				// 방 채팅 한 줄 (LOBBY_ROOMS와 번호가 겹치면 받는 쪽에서 구분 못 함)
+		GAME_VOTE,				// 투표 단일 결과
+		GAME_LASTVOTE,			// 찬반 투표 한 단일결과
 		END
 	};
 
