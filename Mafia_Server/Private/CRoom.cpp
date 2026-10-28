@@ -22,7 +22,12 @@ namespace MafiaServer
 	{
 		/* 대기 중이면 할 일 없음, 게임 중이면 시각을 그대로 넘김 (시간 계산은 게임 로직이) */
 		if (m_pLogic == nullptr) return;
+
+		/* 단계 시간 검사는 로직 Pre_Update에서 → 그 앞뒤로 비교해서 바뀐 프레임에만 한 번 알림 */
+		const Protocol::GAME_PHASE ePrev = m_pLogic->Get_Phase();
 		m_pLogic->Pre_Update(ullNow);
+		if (m_pLogic->Get_Phase() != ePrev)
+			Send_ChangePhase(ullNow);
 	}
 
 	void CRoom::Update(ULONGLONG ullNow)
@@ -43,22 +48,51 @@ namespace MafiaServer
 
 	void CRoom::Start_Game(ULONGLONG ullNow)
 	{
-		/* 앉은 사람 중 한 명을 마피아로 (ponytail: 마피아 1명 고정, 직업 배정은 게임 로직으로 옮길 예정) */
+		/* 우선 게임이 진행 가능한지 다시 체크 (카운트다운 동안 나간 사람) */
+		Protocol::S_TO_C_STARTGAME tBody{};
+		if (m_iCurPlayerNum < Protocol::MIN_START_PLAYER)
+		{
+			/* 게임 시작을 할 수 없음 : 대기로 되돌리고 (안 돌리면 매 프레임 여기로 옴) 방 전원에게 취소 */
+			m_eCurState = CRoom::STATE::WATING;
+			tBody.eResult = Protocol::STARTGAME_RESULT::CANCELED;
+
+			for (auto Key : m_arrayPlayerClientKeys)
+			{
+				if (Key == Net::NONE_CLIENTKEY) continue;
+				m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_STARTGAME, tBody);
+			}
+			return;
+		}
+
+		/* 앉은 사람 중 한 명을 마피아로 (마피아 1명 고정, 직업 배정은 게임 로직으로 옮길 예정) */
 		std::vector<Net::ClientKey> vecSeated;
 		for (Net::ClientKey Key : m_arrayPlayerClientKeys)
 			if (Key != Net::NONE_CLIENTKEY) vecSeated.push_back(Key);
-		if (vecSeated.empty()) { m_eCurState = CRoom::STATE::WATING; return; }
 
 		static std::mt19937 s_Random{ std::random_device{}() };
 		std::uniform_int_distribution<size_t> tPick(0, vecSeated.size() - 1);
 
 		CMafiaLogic::Init_Data tData{};
-		tData.iRoomKey			= m_iRoomKey;
-		tData.iMafiaClientKey	= vecSeated[tPick(s_Random)];
-		tData.ullNow			= ullNow;
+		tData.iRoomKey = m_iRoomKey;
+		tData.iMafiaClientKey = vecSeated[tPick(s_Random)];
+		tData.ullNow = ullNow;
 
 		m_pLogic = CMafiaLogic::Create(tData);
-		m_eCurState = (m_pLogic != nullptr) ? CRoom::STATE::GAME : CRoom::STATE::WATING;
+		if (m_pLogic == nullptr) { m_eCurState = CRoom::STATE::WATING; return; }
+		m_eCurState = CRoom::STATE::GAME;
+
+		/* 사람마다 : 첫 단계는 같고 직업만 다름 */
+		tBody.eResult	= Protocol::STARTGAME_RESULT::OK;
+		tBody.ePhase	= m_pLogic->Get_Phase();
+		tBody.iDay		= static_cast<uint16_t>(m_pLogic->Get_Day());
+		tBody.iRemainMs = static_cast<uint32_t>(m_pLogic->Get_Remain(ullNow));
+
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			tBody.eJob = (Key == tData.iMafiaClientKey) ? Protocol::JOB::MAFIA : Protocol::JOB::CITIZEN;
+			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_STARTGAME, tBody);
+		}
 	}
 
 	void CRoom::LateUpdate(ULONGLONG ullNow)
@@ -176,6 +210,22 @@ namespace MafiaServer
 			if (Key == Net::NONE_CLIENTKEY) continue;
 			m_iRoomMasterClientKey = Key;
 			break;
+		}
+	}
+
+	void CRoom::Send_ChangePhase(ULONGLONG uillNow)
+	{
+		if (m_pLogic == nullptr) return;
+
+		Protocol::S_TO_C_CHANGEPHASE tBody{};
+		tBody.eCurPhase = m_pLogic->Get_Phase();
+		tBody.iDay		= m_pLogic->Get_Day();
+		tBody.iRemainMs	= m_pLogic->Get_Remain(uillNow);
+
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+				m_pServerApp->Send_Packet( Key , Protocol::PACKET_TYPE::S_TO_C_CHANGEPHASE, &tBody, sizeof(tBody) );
 		}
 	}
 

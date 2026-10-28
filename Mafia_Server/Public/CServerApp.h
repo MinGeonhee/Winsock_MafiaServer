@@ -64,6 +64,20 @@ namespace MafiaServer
 	public:
 		CPlayerManager* Get_PlayerManager() { return m_pPlayerManager; }
 		CRoomManager*	Get_RoomManager()   { return m_pRoomManager; }
+
+	/* 패킷 보내기 : NetLib 서버의 Send_Packet 연결 (Room 등에서 CServerApp::Get_Instance()->Send_Packet(...)으로 사용)
+	   실제 전송은 이번 프레임 Late_Update에서 (보내기 목록에 쌓기만 함) */
+	public:
+		bool	Send_Packet(Net::ClientKey iKey, Protocol::PACKET_TYPE eType, const void* pBody, uint16_t usLen)
+		{
+			if (m_pMainServer == nullptr) return false;
+			return m_pMainServer->Send_Packet(iKey, static_cast<uint16_t>(eType), pBody, usLen);
+		}
+		template<class T>
+		bool	Send_Packet(Net::ClientKey iKey, Protocol::PACKET_TYPE eType, const T& tBody)
+		{
+			return Send_Packet(iKey, eType, &tBody, static_cast<uint16_t>(sizeof(T)));
+		}
 	private:
 		inline static CServerApp* m_pInstance{ nullptr };
 	private:

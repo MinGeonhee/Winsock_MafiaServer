@@ -48,6 +48,15 @@ namespace Protocol
 		ROOM_KEY	iRoomKey{};
 	};
 
+	/* 게임 페이즈 변경 패킷 */
+	struct S_TO_C_CHANGEPHASE
+	{
+		Protocol::GAME_PHASE	eCurPhase{Protocol::GAME_PHASE::END};	/* 현재 Phase */
+		uint16_t				iDay{0};								/* 몇일째 인지 */
+		uint32_t				iRemainMs{ 0 };							/* 현재 Phase 제한시간 */
+	};
+
+
 	/* 방 자리 바뀜 : 방장 + 자리 7칸 (빈자리는 iKey 0) */
 	struct S_TO_C_ROOM_MEMBERS
 	{
@@ -55,15 +64,31 @@ namespace Protocol
 		ROOM_SEAT	arrSeats[Protocol::MAX_ROOM_PLAYER]{};
 	};
 
+	/* 방장 → 서버 : 게임 시작 가능한지 확인 요청 */
 	struct C_TO_S_STARTGAME
 	{
 		Protocol::ROOM_KEY iRoomKey;
 	};
 
+	/* 서버 → 클라 : 시작 확인 결과
+	   OK       : 방 전원, 클라는 START_COUNTDOWN_MS 카운트다운 표시 (실제 시작은 서버가 S_TO_C_GAME_START로 알림)
+	   NOT_FULL : 방장에게만
+	   CANCELED : 방 전원, 카운트다운 중 인원이 빠져 시작 취소 */
+	struct S_TO_C_STARTGAME_RESULT
+	{
+		Protocol::STARTGAME_RESULT	eResult{ STARTGAME_RESULT::END};
+	};
+
+	/* 서버 → 클라 : 실제 게임 시작 (카운트다운 끝에 서버가 한 번 더 확인한 뒤 먼저 보냄)
+	   사람마다 따로 보냄 : eJob은 받는 사람 자기 직업만 */
 	struct S_TO_C_STARTGAME
 	{
-		/* 게임 시작 실패 이유 Text로 넣어서 보내줄 예정 */
-		STARTGAME_RESULT	eResult{ STARTGAME_RESULT::END};
+		Protocol::STARTGAME_RESULT	eResult{ STARTGAME_RESULT::END };
+
+		Protocol::JOB				eJob{ JOB::UNKNOWN };
+		Protocol::GAME_PHASE		ePhase{ GAME_PHASE::END };	/* 첫 단계 */
+		uint16_t					iDay{ 0 };
+		uint32_t					iRemainMs{ 0 };				/* 첫 단계 남은 시간 (클라는 자기 시계로 카운트다운 표시) */
 	};
 
 	/* 로비 접속자 */
@@ -82,6 +107,7 @@ namespace Protocol
 		bool	 isPlaying{false};							// 게임 중인지 아닌지
 		wchar_t	 wszRoomName[Protocol::MAX_ROOMNAME_BUF]{};	// 룸 이름
 	};
+
 
 
 	struct C_TO_S_CHAT

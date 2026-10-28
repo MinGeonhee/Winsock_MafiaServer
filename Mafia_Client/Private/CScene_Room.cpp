@@ -6,6 +6,35 @@
 
 namespace MafiaClient
 {
+	namespace
+	{
+		/* 서버가 보낸 enum → 화면 글자 (규칙은 없고 이름만) */
+		const wchar_t* Job_Name(Protocol::JOB eJob)
+		{
+			switch (eJob)
+			{
+			case Protocol::JOB::CITIZEN:	return L"시민";
+			case Protocol::JOB::MAFIA:		return L"마피아";
+			default:						return L"?";
+			}
+		}
+
+		const wchar_t* Phase_Name(Protocol::GAME_PHASE ePhase)
+		{
+			switch (ePhase)
+			{
+			case Protocol::GAME_PHASE::NIGHT:			return L"밤";
+			case Protocol::GAME_PHASE::LOADING_DAY:		return L"아침이 밝아옵니다";
+			case Protocol::GAME_PHASE::DAY:				return L"토론";
+			case Protocol::GAME_PHASE::VOTE:			return L"투표";
+			case Protocol::GAME_PHASE::ALLOCUTION:		return L"최후의 변론";
+			case Protocol::GAME_PHASE::LAST_VOTE:		return L"찬반 투표";
+			case Protocol::GAME_PHASE::LOADING_NIGHT:	return L"밤이 찾아옵니다";
+			default:									return L"";
+			}
+		}
+	}
+
 	CScene_Room::CScene_Room()
 		: CScene(), m_isDirty{ true }
 	{
@@ -112,6 +141,7 @@ namespace MafiaClient
 			tView.strName	= wszNick;
 			tView.isMe		= (tSeat.iKey == iMyKey);
 			tView.isMaster	= (tSeat.iKey == tInfo.iMasterKey);
+			if (tView.isMe && m_eJob != Protocol::JOB::UNKNOWN) tView.strTag = Job_Name(m_eJob);	/* 내 직업 (자리가 갱신돼도 유지) */
 		}
 		m_isDirty = true;
 	}
@@ -129,14 +159,7 @@ namespace MafiaClient
 		if (m_ullStartAt != 0)
 		{
 			const ULONGLONG ullNow = GetTickCount64();
-			if (ullNow >= m_ullStartAt)
-			{
-				m_ullStartAt = 0;
-				m_tView.vecChats.push_back({ L"", L"게임이 시작되었습니다", false, true });
-				m_tView.isPlaying = true;
-				m_isDirty = true;
-			}
-			else
+			if(ullNow < m_ullStartAt)
 			{
 				const int iCount = static_cast<int>((m_ullStartAt - ullNow + 999) / 1000);	/* 남은 초 (올림) */
 				if (iCount != m_iLastCount)
@@ -146,7 +169,34 @@ namespace MafiaClient
 					m_isDirty = true;
 				}
 			}
+			/* 0초가 돼도 스스로 넘어가지 않음 : 서버의 S_TO_C_STARTGAME을 기다림 */
 		}
+
+		/* 게임 중 : 이번 단계 남은 시간 표시 */
+		if (m_tView.isPlaying) Update_PhaseTime();
+	}
+
+	void CScene_Room::Apply_Phase(Protocol::GAME_PHASE ePhase, uint16_t iDay, uint32_t iRemainMs)
+	{
+		m_ePhase				= ePhase;
+		m_ullPhaseEnd			= GetTickCount64() + iRemainMs;		/* 받은 순간 기준으로 내 시계로 셈 */
+		m_iLastRemainSec		= -1;
+		m_tView.iDay			= iDay;
+		m_tView.isNight			= (ePhase == Protocol::GAME_PHASE::NIGHT || ePhase == Protocol::GAME_PHASE::LOADING_NIGHT);
+		Update_PhaseTime();
+	}
+
+	void CScene_Room::Update_PhaseTime()
+	{
+		const ULONGLONG ullNow = GetTickCount64();
+		const int iRemainSec = (ullNow >= m_ullPhaseEnd) ? 0 : static_cast<int>((m_ullPhaseEnd - ullNow + 999) / 1000);
+		if (iRemainSec == m_iLastRemainSec) return;
+
+		m_iLastRemainSec = iRemainSec;
+		wchar_t wszTime[16]{};
+		swprintf_s(wszTime, L"%d : %02d", iRemainSec / 60, iRemainSec % 60);
+		m_tView.strSub = std::wstring(Phase_Name(m_ePhase)) + L"   " + wszTime;		/* 탁자 가운데 둘째 줄 : "투표   0 : 15" */
+		m_isDirty = true;
 	}
 
 	void CScene_Room::Show_Notice(const std::wstring& strText)
@@ -215,29 +265,65 @@ namespace MafiaClient
 			Apply_RoomInfo();
 			break;
 		}
-		/* 게임 시작 요청 받은거 */
-		case Protocol::PACKET_TYPE::S_TO_C_STARTGAME:
+		/* 게임 시작 가능 여부 패킷(방장만 체크) */
+		case Protocol::PACKET_TYPE::S_TO_C_STARTGAME_RESULT:
 		{
-			const Protocol::S_TO_C_STARTGAME* pData = reinterpret_cast<const Protocol::S_TO_C_STARTGAME*>(tEvent.Get_Body());
-			if (pData == nullptr || tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_STARTGAME)) break;
+			const Protocol::S_TO_C_STARTGAME_RESULT* pData = reinterpret_cast<const Protocol::S_TO_C_STARTGAME_RESULT*>(tEvent.Get_Body());
+			if (pData == nullptr || tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_STARTGAME_RESULT)) break;
 
 			switch (pData->eResult)
 			{
-			case Protocol::STARTGAME_RESULT::OK:			/* 방 전원이 받음 : 카운트다운 시작 (Update에서 1초마다 알림) */
+			case Protocol::STARTGAME_RESULT::OK: /* 게임 시작 가능 */
+			{
 				m_ullStartAt = GetTickCount64() + Protocol::START_COUNTDOWN_MS;
 				m_iLastCount = 0;
+
 				break;
-			case Protocol::STARTGAME_RESULT::NOT_FULL:		/* 방장만 받음 */
+			}
+			case Protocol::STARTGAME_RESULT::NOT_FULL:		
 			{
 				int iSeated{ 0 };
 				for (const ConsoleUI::SeatView& tSeat : m_tView.arrSeats) if (!tSeat.strName.empty()) ++iSeated;
 				Show_Notice(L"인원이 부족합니다 (" + std::to_wstring(iSeated) + L"/" + std::to_wstring(Protocol::MAX_ROOM_PLAYER) + L")");
+
 				break;
 			}
-			default:
+			case Protocol::STARTGAME_RESULT::SERVER_ERROR:			
+			{
 				Show_Notice(L"게임을 시작할 수 없습니다");
 				break;
 			}
+			default: break;
+			}
+
+
+
+			break;
+		}
+		/* 5초가 지난 뒤 서버에서 판단해서 줌 */
+		case Protocol::PACKET_TYPE::S_TO_C_STARTGAME:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_STARTGAME)) break;
+			Protocol::S_TO_C_STARTGAME tStart{};
+			memcpy(&tStart, tEvent.Get_Body(), sizeof(tStart));
+
+			m_ullStartAt = 0;		/* 카운트다운 끝 (성공이든 취소든) */
+
+			if (tStart.eResult != Protocol::STARTGAME_RESULT::OK)
+			{
+				/* 카운트다운 중 인원이 빠져 취소 → 다시 대기 */
+				m_tView.vecChats.push_back({ L"", L"인원이 부족해 시작이 취소되었습니다", false, true });
+				Show_Notice(L"게임 시작이 취소되었습니다");
+				break;
+			}
+
+			/* 게임 시작 : 내 직업 + 첫 단계 */
+			m_eJob = tStart.eJob;
+			m_tView.isPlaying = true;
+			m_tView.vecChats.push_back({ L"", L"게임이 시작되었습니다", false, true });
+			m_tView.vecChats.push_back({ L"", std::wstring(L"당신의 직업은 ") + Job_Name(m_eJob) + L" 입니다", false, true });
+			Apply_RoomInfo();		/* 내 의자 아래에 직업 표시 */
+			Apply_Phase(tStart.ePhase, tStart.iDay, tStart.iRemainMs);
 			break;
 		}
 		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:
@@ -247,6 +333,7 @@ namespace MafiaClient
 			
 			if (pData->eDataType == Protocol::DATA_TYPE::CHAT_LOG)
 			{
+				if (tEvent.Get_BodyLen() != sizeof(Protocol::CHAT_LOG)) break;		/* 크기 안 맞으면 버림 (짧은 패킷이면 memcpy가 범위 밖을 읽음) */
 				Protocol::CHAT_LOG tChat{};
 				memcpy(&tChat, tEvent.Get_Body() , sizeof(tChat));                   // 복사본에서
 				tChat.wszName[Protocol::MAX_NICNAME_BUF - 1] = L'\0';                // 끝 막기
@@ -258,6 +345,17 @@ namespace MafiaClient
 
 			break;
 		}
+		case Protocol::PACKET_TYPE::S_TO_C_CHANGEPHASE:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_CHANGEPHASE)) break;
+			Protocol::S_TO_C_CHANGEPHASE tBody{}; memcpy(&tBody, tEvent.Get_Body(), sizeof(tBody));
+			
+			Apply_Phase(tBody.eCurPhase, tBody.iDay, tBody.iRemainMs);
+			m_tView.vecChats.push_back({ L"", Phase_Message(tBody.eCurPhase), false, true });
+
+			break;
+		}
+
 
 		default: break;
 		}

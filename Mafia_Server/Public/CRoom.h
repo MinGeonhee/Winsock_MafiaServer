@@ -75,6 +75,7 @@ namespace MafiaServer
 
 	private:
 		void			Change_Master();
+		void			Send_ChangePhase(ULONGLONG uillNow);
 		void			Start_Game(ULONGLONG ullNow);		/* 로딩 끝 : 게임 상태 + 게임 로직 생성 */
 	public:
 		static std::unique_ptr<CRoom> Create(const Init_Data& tData);

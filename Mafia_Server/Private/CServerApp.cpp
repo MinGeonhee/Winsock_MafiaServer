@@ -220,7 +220,8 @@ namespace MafiaServer
 			uint16_t iLen = tEvent.Get_BodyLen();
 			const Protocol::C_TO_S_STARTGAME* pBody = reinterpret_cast<const Protocol::C_TO_S_STARTGAME*>(tEvent.Get_Body());
 
-			Protocol::S_TO_C_STARTGAME tGameStartResult{};
+			/* 확인 ① 결과 (실제 시작 S_TO_C_STARTGAME은 5초 뒤 방 Update에서 따로) */
+			Protocol::S_TO_C_STARTGAME_RESULT tGameStartResult{};
 			if (iLen != sizeof(Protocol::C_TO_S_STARTGAME) || pBody == nullptr)
 			{
 				tGameStartResult.eResult = Protocol::STARTGAME_RESULT::SERVER_ERROR;
@@ -243,8 +244,8 @@ namespace MafiaServer
 				m_pRoomManager->Start_Loading(pBody->iRoomKey, m_ullNow);
 
 			if (tGameStartResult.eResult == Protocol::STARTGAME_RESULT::OK)
-				m_pRoomManager->Find_Room(pBody->iRoomKey)->SendPacket_All( Protocol::PACKET_TYPE::S_TO_C_STARTGAME ,&tGameStartResult,sizeof( Protocol::S_TO_C_STARTGAME ) , m_pMainServer.get() );
-			else m_pMainServer->Send_Packet(tEvent.iKey,static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_STARTGAME), tGameStartResult);
+				m_pRoomManager->Find_Room(pBody->iRoomKey)->SendPacket_All( Protocol::PACKET_TYPE::S_TO_C_STARTGAME_RESULT ,&tGameStartResult,sizeof( Protocol::S_TO_C_STARTGAME_RESULT ) , m_pMainServer.get() );
+			else m_pMainServer->Send_Packet(tEvent.iKey,static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_STARTGAME_RESULT), tGameStartResult);
 	
 			
 			break;
