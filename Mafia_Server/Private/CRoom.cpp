@@ -101,7 +101,6 @@ namespace MafiaServer
 		tBody.iDay		= static_cast<uint16_t>(m_pLogic->Get_Day());
 		tBody.iRemainMs = static_cast<uint32_t>(m_pLogic->Get_Remain(ullNow));
 		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i) tBody.arrSeatKeys[i] = m_arrayPlayerClientKeys[i];	/* 섞인 자리 */
-		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i) tBody.arrAllJobs[i] = m_pLogic->Get_Job(i);			/* [취약 예시] 전원 직업 */
 
 		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
 		{

@@ -907,7 +907,6 @@ namespace MafiaClient
 
 			/* 게임 시작 : 내 직업 + 첫 단계 */
 			m_eJob = tStart.eJob;
-			memcpy(m_arrAllJobs.data(), tStart.arrAllJobs, sizeof(tStart.arrAllJobs));	/* [취약 예시] */
 			m_iAccusedSeat = -1;
 			m_iAliveMask = 0x7F;		/* 시작은 전원 생존 (다음 CHANGEPHASE부터 서버 값) */
 			m_isFindJobUsed = m_isContacted = false;
