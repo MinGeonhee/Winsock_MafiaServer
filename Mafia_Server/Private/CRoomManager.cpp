@@ -71,32 +71,32 @@ namespace MafiaServer
 		}
 		return 0;
 	}
-	void CRoomManager::Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer)
+	const wchar_t* CRoomManager::Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer)
 	{
-		if (Find_Room(iRoomKey) == nullptr) return;
+		if (Find_Room(iRoomKey) == nullptr) return L"없는 방";
 		
-		m_umapRooms[iRoomKey]->Chatting(tTime,iChatterKey,wstrText,pMainServer);
+		return m_umapRooms[iRoomKey]->Chatting(tTime,iChatterKey,wstrText,pMainServer);
 	}
 
-	void CRoomManager::Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, INT32 iSeat)
+	const wchar_t* CRoomManager::Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, INT32 iSeat)
 	{
 		auto iter = m_umapRooms.find(iRoomKey);
-		if (iter == m_umapRooms.end()) return;
-		iter->second->Vote(iVoterKey, iSeat);
+		if (iter == m_umapRooms.end()) return L"없는 방";
+		return iter->second->Vote(iVoterKey, iSeat);
 	}
 
-	void CRoomManager::LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is)
+	const wchar_t* CRoomManager::LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is)
 	{
 		auto iter = m_umapRooms.find(iRoomKey);
-		if (iter == m_umapRooms.end()) return;
-		iter->second->LastVote(iVoterKey,is);
+		if (iter == m_umapRooms.end()) return L"없는 방";
+		return iter->second->LastVote(iVoterKey,is);
 	}
 
-	void CRoomManager::Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction)
+	const wchar_t* CRoomManager::Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction)
 	{
 		auto iter = m_umapRooms.find(tAction.iRoomKey);
-		if (iter == m_umapRooms.end()) return;
-		iter->second->Use_Skill(iUserKey, tAction);
+		if (iter == m_umapRooms.end()) return L"없는 방";
+		return iter->second->Use_Skill(iUserKey, tAction);
 	}
 
 

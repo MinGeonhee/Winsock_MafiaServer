@@ -99,8 +99,9 @@ namespace MafiaServer
 		bool							Vote(INT32 iVoter, INT32 iTarget);
 		bool							LastVote(INT32 iVoter, bool isAgree);
 
-		/* 각 직업별로 능력사용처리 : tAction은 받은 버퍼라 값만 꺼내 저장 (크기 검사는 CServerApp에서 끝난 상태) */
-		void							Use_Skill(INT32 iUseSeat, const Protocol::JOB_ACTION& tAction);
+		/* 각 직업별로 능력사용처리 : tAction은 받은 버퍼라 값만 꺼내 저장 (크기 검사는 CServerApp에서 끝난 상태)
+		   반환 : nullptr = 받아들임, 아니면 버린 이유 (서버 로그용) */
+		const wchar_t*					Use_Skill(INT32 iUseSeat, const Protocol::JOB_ACTION& tAction);
 	private:
 		void							Change_Phase(ULONGLONG ullNow);	/* 다음 State로 */
 		void							Start_Phase(Protocol::GAME_PHASE ePhase, ULONGLONG ullNow);	/* 이 State 시작 : 시작 시각 · 제한 시간 기록 */

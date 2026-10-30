@@ -207,7 +207,7 @@ namespace MafiaServer
 
 			SYSTEMTIME tTime{};
 			GetLocalTime(&tTime);
-			m_pRoomManager->Chatting(tPacket.tData.iRoomKey, tTime, tEvent.iKey, tPacket.tData.wszText, m_pMainServer.get());
+			Log_Reject(tEvent.iKey, L"채팅", m_pRoomManager->Chatting(tPacket.tData.iRoomKey, tTime, tEvent.iKey, tPacket.tData.wszText, m_pMainServer.get()));
 			break; 
 #pragma endregion
 		}
@@ -285,7 +285,7 @@ namespace MafiaServer
 			if ( pBody  == nullptr) break;
 
 			/* 투표 결과전달하기 */
-			m_pRoomManager->Get_Instance()->Vote(pBody->iRoomKey,tEvent.iKey,pBody->iVoteSeat);
+			Log_Reject(tEvent.iKey, L"투표", m_pRoomManager->Get_Instance()->Vote(pBody->iRoomKey,tEvent.iKey,pBody->iVoteSeat));
 			break;
 		}
 #pragma endregion
@@ -296,20 +296,20 @@ namespace MafiaServer
 			const Protocol::C_TO_S_LAST_VOTE* pBody = reinterpret_cast<const Protocol::C_TO_S_LAST_VOTE*>(tEvent.Get_Body());
 			if (pBody == nullptr) break;
 			
-			m_pRoomManager->LastVote(pBody->iRoomKey, tEvent.iKey, pBody->isAgree);
+			Log_Reject(tEvent.iKey, L"찬반", m_pRoomManager->LastVote(pBody->iRoomKey, tEvent.iKey, pBody->isAgree));
 			break;
 #pragma endregion
 		}
 		case Protocol::PACKET_TYPE::C_TO_S_JOB_ACTION:
 		{
 			/* 머리부터 : 직업별 구조체 크기는 eJob을 보고 한 번 더 확인 */
-			if (tEvent.Get_BodyLen() < sizeof(Protocol::JOB_ACTION)) break;
+			if (tEvent.Get_BodyLen() < sizeof(Protocol::JOB_ACTION)) { Log_Reject(tEvent.iKey, L"능력", L"패킷 길이가 머리보다 짧음"); break; }
 			const Protocol::JOB_ACTION* pBody{ reinterpret_cast<const Protocol::JOB_ACTION*>(tEvent.Get_Body())};
 			if (pBody == nullptr) break;
 
-			if (tEvent.Get_BodyLen() != JobAction_Size(pBody->eJob)) break;	/* 모르는 직업이면 0 → 버림 */
+			if (tEvent.Get_BodyLen() != JobAction_Size(pBody->eJob)) { Log_Reject(tEvent.iKey, L"능력", L"직업별 구조체 길이 불일치 (모르는 직업 포함)"); break; }
 
-			m_pRoomManager->Use_Skill(tEvent.iKey, *pBody);
+			Log_Reject(tEvent.iKey, L"능력", m_pRoomManager->Use_Skill(tEvent.iKey, *pBody));
 			break;
 		}
 		case Protocol::PACKET_TYPE::END:			break;
@@ -332,6 +332,14 @@ namespace MafiaServer
 		if (m_pPlayerManager->LogOut_Player(tEvent.iKey) == false) return;
 
 		m_pMainServer->Add_CustomLog(tEvent.iKey, L"로그아웃 (" + strNickname + L")");
+		m_isDirty = true;
+	}
+
+	void CServerApp::Log_Reject(Net::ClientKey iKey, const wchar_t* szWhat, const wchar_t* szReason)
+	{
+		/* 클라 요청을 서버가 버렸을 때 : 이유를 로그에 남김 (조작된 패킷 추적 · 보안 테스트 증거) */
+		if (szReason == nullptr) return;
+		m_pMainServer->Add_CustomLog(iKey, std::wstring(L"거부 [") + szWhat + L"] " + szReason);
 		m_isDirty = true;
 	}
 

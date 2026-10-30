@@ -54,6 +54,7 @@ namespace MafiaServer
 		void	On_Disconnect(const Net::Event& tEvent);
 	private:
 		void	Handle_RequestData(const Net::Event& tEvent);
+		void		Log_Reject(Net::ClientKey iKey, const wchar_t* szWhat, const wchar_t* szReason);	/* 버린 요청 이유를 서버 로그에 (nullptr = 받아들임 → 아무것도 안 함) */
 		void	Handle_CreateRoom(const Net::Event& tEvent);
 		void	Handle_EnterRoom(const Net::Event& tEvent);
 		void	Fill_Seats(const CRoom* pRoom, Protocol::ROOM_SEAT (&arrSeats)[Protocol::MAX_ROOM_PLAYER]);	/* 자리 7칸 채우기 (입장 / 자리 변경 공용) */

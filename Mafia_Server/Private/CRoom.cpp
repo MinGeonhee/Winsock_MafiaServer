@@ -176,18 +176,18 @@ namespace MafiaServer
 			Change_Master();
 	}
 
-	void CRoom::Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText,Net::CServer* pMainServer)
+	const wchar_t* CRoom::Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText,Net::CServer* pMainServer)
 	{
 		/* 현재 방안에 해당 Key의 인원이 있는지 확인 */
-		if (pMainServer == nullptr) return;
-		if (Has_Player(iChatterKey) == false) return;
+		if (pMainServer == nullptr) return nullptr;
+		if (Has_Player(iChatterKey) == false) return L"방에 없는 사람의 채팅";
 		const CPlayer* pPlayer = m_pServerApp->Get_PlayerManager()->Find_Player(iChatterKey);
-		if (pPlayer == nullptr) return;
-		if (m_pChatting == nullptr) return;
+		if (pPlayer == nullptr) return nullptr;
+		if (m_pChatting == nullptr) return nullptr;
 
 		/* 게임 중 : 단계 규칙상 못 치는 사람의 채팅은 버림 (클라도 막지만 서버가 최종 판단) */
 		const bool isGame = (m_eCurState == CRoom::STATE::GAME && m_pLogic);
-		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return;
+		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return L"지금 단계엔 채팅 불가 (밤 · 투표 · 사망 등)";
 		const bool isMafiaOnly = isGame && m_pLogic->Get_Phase() == Protocol::GAME_PHASE::NIGHT;	/* 밤 채팅은 마피아만 받음 */
 
 		m_pChatting->Chatting(tTime,iChatterKey,wstrText);
@@ -210,12 +210,13 @@ namespace MafiaServer
 			if (isMafiaOnly && !m_pLogic->Is_NightChatMember(i)) continue;
 			pMainServer->Send_Packet(Key, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tChat);
 		}
+		return nullptr;
 	}
 
-	void CRoom::Vote(Net::ClientKey iVoterKey, INT32 iSeat)
+	const wchar_t* CRoom::Vote(Net::ClientKey iVoterKey, INT32 iSeat)
 	{
-		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return;
-		if (m_pLogic->Vote(Find_Seat(iVoterKey), iSeat) == false) return;	/* NONE_SEAT = 무효표 그대로 */
+		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return L"게임 중이 아님";
+		if (m_pLogic->Vote(Find_Seat(iVoterKey), iSeat) == false) return L"투표 거부 (투표 단계 아님 · 죽은 사람 · 자기 자신 · 잘못된 대상)";	/* NONE_SEAT = 무효표 그대로 */
 
 		Protocol::GAME_VOTE tData{};
 		tData.eDataType = Protocol::DATA_TYPE::GAME_VOTE;
@@ -228,13 +229,14 @@ namespace MafiaServer
 			if (Key == Net::NONE_CLIENTKEY) continue;
 			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, &tData, sizeof(tData));
 		}
+		return nullptr;
 	}
 
-	void CRoom::LastVote(Net::ClientKey iVoterKey, bool is)
+	const wchar_t* CRoom::LastVote(Net::ClientKey iVoterKey, bool is)
 	{
-		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return;
+		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return L"게임 중이 아님";
 		const int iSeat = Find_Seat(iVoterKey);
-		if (m_pLogic->LastVote(iSeat, is) == false) return;
+		if (m_pLogic->LastVote(iSeat, is) == false) return L"찬반 거부 (찬반 단계 아님 · 이미 투표 · 지목된 본인 · 죽은 사람)";
 
 
 		Protocol::GAME_LASTVOTE tData{};
@@ -247,6 +249,7 @@ namespace MafiaServer
 			if (Key == Net::NONE_CLIENTKEY) continue;
 			m_pServerApp->Send_Packet( Key, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, &tData, sizeof(tData));
 		}
+		return nullptr;
 	}
 
 	void CRoom::Send_ToSeat(INT32 iSeat, Protocol::PACKET_TYPE eType, const void* pBody, uint16_t usLen) const
@@ -263,10 +266,10 @@ namespace MafiaServer
 			Send_ToSeat(i, eType, pBody, usLen);
 	}
 
-	void CRoom::Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction)
+	const wchar_t* CRoom::Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction)
 	{
-		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return;
-		m_pLogic->Use_Skill(Find_Seat(iUserKey), tAction);
+		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return L"게임 중이 아님";
+		return m_pLogic->Use_Skill(Find_Seat(iUserKey), tAction);
 	}
 
 	int CRoom::Find_Seat(Net::ClientKey iKey) const

@@ -279,14 +279,14 @@ namespace MafiaServer
 		return isTie ? -1 : iBest;
 	}
 
-	void CMafiaLogic::Use_Skill(INT32 iUseSeat, const Protocol::JOB_ACTION& tAction)
+	const wchar_t* CMafiaLogic::Use_Skill(INT32 iUseSeat, const Protocol::JOB_ACTION& tAction)
 	{
-		if (!Check_SeatRange(iUseSeat)) return;
-		if (m_arraySeatInfo[iUseSeat]->isAlive == false) return;
+		if (!Check_SeatRange(iUseSeat)) return L"방에 없는 사람";
+		if (m_arraySeatInfo[iUseSeat]->isAlive == false) return L"죽은 사람의 능력";
 
 		/* 패킷에 적힌 직업 = 실제 내 직업이어야 함 (조작 방지) */
 		Protocol::JOB eJob = m_arraySeatInfo[iUseSeat]->eJob;
-		if (tAction.eJob != eJob) return;
+		if (tAction.eJob != eJob) return L"직업 불일치 (패킷 직업 ≠ 실제 직업)";
 
 		switch (eJob)
 		{
@@ -294,28 +294,28 @@ namespace MafiaServer
 		case Protocol::JOB::MAFIA:
 		{
 			const INT32 iTargetSeat = static_cast<const Protocol::MAFIA_ACTION&>(tAction).tTarget.iSeat;
-			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)		return;
-			if (!Check_SeatRange(iTargetSeat))					return;
-			if (m_arraySeatInfo[iTargetSeat]->isAlive == false) return;
-			if (Is_Mafia(iTargetSeat))							return;	/* 자기 자신 포함 */
-			if (m_tUseSkillData.iMafiaKillTarget != Protocol::NONE_SEAT)		return;	/* 이미 능력사용 */
+			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)		return L"밤이 아님";
+			if (!Check_SeatRange(iTargetSeat))					return L"잘못된 대상 (범위 밖 · 빈자리)";
+			if (m_arraySeatInfo[iTargetSeat]->isAlive == false) return L"죽은 사람은 대상이 될 수 없음";
+			if (Is_Mafia(iTargetSeat))							return L"마피아끼리 처치 불가";	/* 자기 자신 포함 */
+			if (m_tUseSkillData.iMafiaKillTarget != Protocol::NONE_SEAT)		return L"이번 밤 이미 사용";	/* 이미 능력사용 */
 
 			/* 추후 판정을위한 데이터 */
 			m_tUseSkillData.iMafiaKillTarget = iTargetSeat;
 
-			return;
+			return nullptr;
 		}
 		case Protocol::JOB::PRESIDENT:	/* 대통령 : 밤마다 공지 1번 → 방 전원 */
 		{
 #pragma region 대통령
-			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return;
-			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return;	/* 이번 밤 이미 씀 */
+			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return L"밤이 아님";
+			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
 			const Protocol::PRESIDENT_ACTION& tPresidentAction = static_cast<const Protocol::PRESIDENT_ACTION&>(tAction);
 
 			Protocol::PRESIDENT_NOTICE tNotice{};
 			tNotice.eDataType = Protocol::DATA_TYPE::PRESIDENT_NOTICE;
 			wcsncpy_s(tNotice.tNotice.wszText, tPresidentAction.tNotice.wszText, _TRUNCATE);	/* 클라가 끝(\0)을 안 넣어 보내도 잘라서 끝냄 */
-			if (tNotice.tNotice.wszText[0] == L'\0')				return;	/* 빈 공지 */
+			if (tNotice.tNotice.wszText[0] == L'\0')				return L"빈 공지";	/* 빈 공지 */
 
 			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;
 			m_pRoom->Send_ToAll(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, tNotice);
@@ -326,11 +326,11 @@ namespace MafiaServer
 		{
 #pragma region 탐정
 			const INT32 iTargetSeat = static_cast<const Protocol::SNOOP_ACTION&>(tAction).tTarget.iSeat;
-			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)						return;
-			if (m_iDay < 1)														return;	/* 첫날 밤(0일차)엔 조사 불가 : 둘째 밤부터 */
-			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)		return;
-			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)					return;
-			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)					return;	/* 이번 밤 이미 씀 */
+			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)						return L"밤이 아님";
+			if (m_iDay < 1)														return L"탐정은 첫날 밤 조사 불가";	/* 첫날 밤(0일차)엔 조사 불가 : 둘째 밤부터 */
+			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)		return L"잘못된 대상 (범위 밖 · 자기 자신)";
+			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)					return L"죽은 사람은 대상이 될 수 없음";
+			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)					return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
 
 			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;
 
@@ -339,22 +339,22 @@ namespace MafiaServer
 			tResult.tTarget.iSeat	= iTargetSeat;
 			tResult.isMafia			= Is_Mafia(iTargetSeat);		/* 배신자는 마피아로 안 나옴 */
 			m_pRoom->Send_ToSeat(iUseSeat, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, tResult);
-			return;
+			return nullptr;
 #pragma endregion
 		}
 		case Protocol::JOB::BODYGUARD:	/* 경호원 : 기록만 (판정은 밤 → 낮) */
 		{
 #pragma region 경호원
 			const INT32 iTargetSeat = static_cast<const Protocol::BODYGUARD_ACTION&>(tAction).tTarget.iSeat;
-			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return;
-			if (!Check_SeatRange(iTargetSeat))						return;
-			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)		return;
-			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return;	/* 이번 밤 이미 씀 */
+			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return L"밤이 아님";
+			if (!Check_SeatRange(iTargetSeat))						return L"잘못된 대상 (범위 밖 · 빈자리)";
+			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)		return L"죽은 사람은 대상이 될 수 없음";
+			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
 
 			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;
 
 			m_tUseSkillData.iBodyguardTarget = iTargetSeat;
-			return;
+			return nullptr;
 #pragma endregion
 		}
 		case Protocol::JOB::MEDIUM:		/* 영매 : 죽은 사람 직업 → 본인에게 */
@@ -362,10 +362,10 @@ namespace MafiaServer
 #pragma region 영매사
 
 			const INT32 iTargetSeat = static_cast<const Protocol::MEDIUM_ACTION&>(tAction).tTarget.iSeat;
-			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return;
-			if (!Check_SeatRange(iTargetSeat))						return;
-			if (m_arraySeatInfo[iTargetSeat]->isAlive)				return;	/* 죽은 사람만 */
-			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return;	/* 이번 밤 이미 씀 */
+			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return L"밤이 아님";
+			if (!Check_SeatRange(iTargetSeat))						return L"잘못된 대상 (범위 밖 · 빈자리)";
+			if (m_arraySeatInfo[iTargetSeat]->isAlive)				return L"영매는 죽은 사람만";	/* 죽은 사람만 */
+			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
 
 			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;
 
@@ -374,7 +374,7 @@ namespace MafiaServer
 			tResult.tTarget.iSeat	= iTargetSeat;
 			tResult.eJob			= m_arraySeatInfo[iTargetSeat]->eJob;
 			m_pRoom->Send_ToSeat(iUseSeat, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, tResult);
-			return;
+			return nullptr;
 #pragma endregion
 		}
 		case Protocol::JOB::BETRAYER:	/* 배신자 : 밤마다 1번 (직업 확인은 게임 중 1회 / 접촉 시도는 매일) → 본인에게 */
@@ -383,12 +383,12 @@ namespace MafiaServer
 			const Protocol::BETRAYER_ACTION& tBetrayerAction = static_cast<const Protocol::BETRAYER_ACTION&>(tAction);
 			const INT32 iTargetSeat = tBetrayerAction.tTarget.iSeat;
 			Seat_Info* pMe = m_arraySeatInfo[iUseSeat];
-			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)					return;
-			if (pMe->isUsePhaseAbility)										return;	/* 이번 밤 이미 씀 */
-			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)	return;
-			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)				return;
-			if (!tBetrayerAction.isContact && m_tUseSkillData.isBetRayerFindJob) return;	/* 직업 확인은 1회 */
-			if (tBetrayerAction.isContact && m_tUseSkillData.isBetRayerFindMafia) return;	/* 이미 접선함 */
+			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)					return L"밤이 아님";
+			if (pMe->isUsePhaseAbility)										return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
+			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)	return L"잘못된 대상 (범위 밖 · 자기 자신)";
+			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)				return L"죽은 사람은 대상이 될 수 없음";
+			if (!tBetrayerAction.isContact && m_tUseSkillData.isBetRayerFindJob) return L"직업 확인은 게임 중 1번";	/* 직업 확인은 1회 */
+			if (tBetrayerAction.isContact && m_tUseSkillData.isBetRayerFindMafia) return L"이미 접선함";	/* 이미 접선함 */
 
 			Protocol::BETRAYER_RESULT tResult{};
 			tResult.eDataType = Protocol::DATA_TYPE::BETRAYER_RESULT;
@@ -423,12 +423,12 @@ namespace MafiaServer
 			}
 
 			m_pRoom->Send_ToSeat(iUseSeat, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, tResult);
-			return;
+			return nullptr;
 #pragma endregion
 		}
 		case Protocol::JOB::SOLDIER:	/* 군인 : 밤 행동 없음 (판정은 밤 → 낮) */
 		default:
-			return;
+			return L"능력이 없는 직업";
 		}
 	}
 
