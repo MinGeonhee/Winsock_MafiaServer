@@ -19,6 +19,7 @@
 #include "CEventQueue.h"
 #include "CClient.h"
 #include "CServer.h"
+#include "Protected.h"		/* 메모리 변조 탐지 값 (클라용) */
 
 
 
