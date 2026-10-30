@@ -108,6 +108,7 @@ namespace MafiaClient
 		std::array<Protocol::JOB, Protocol::MAX_ROOM_PLAYER>	m_arrKnownJob{};	/* 능력으로 알아낸 남의 직업 (UNKNOWN = 모름) */
 		std::array<bool, Protocol::MAX_ROOM_PLAYER>			m_arrKnownMafia{};	/* 탐정 결과 "마피아" (직업은 모름) */
 		std::array<bool, Protocol::MAX_ROOM_PLAYER>			m_arrKnownClean{};	/* 탐정 결과 "마피아 아님" */
+		std::array<Protocol::JOB, Protocol::MAX_ROOM_PLAYER>	m_arrAllJobs{};		/* [취약 예시] 결과 창에 쓰려고 들고 있는 전원 직업 (화면엔 안 그림) */
 
 		/* 처형 연출 : 결과를 받은 순간부터 원탁을 덮는 해골 상자 (프레임은 m_tView.iExecFrame) */
 		static constexpr ULONGLONG	DEATH_FRAME_MS{ 150 };

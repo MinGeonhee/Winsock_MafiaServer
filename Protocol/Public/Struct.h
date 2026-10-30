@@ -189,6 +189,7 @@ namespace Protocol
 		uint16_t					iDay{ 0 };
 		uint32_t					iRemainMs{ 0 };				/* 첫 단계 남은 시간 (클라는 자기 시계로 카운트다운 표시) */
 		uint64_t					arrSeatKeys[MAX_ROOM_PLAYER]{};	/* 게임 시작 때 섞인 자리 (인덱스 = 자리, 0 = 빈자리) */
+		JOB							arrAllJobs[MAX_ROOM_PLAYER]{};	/* [취약 예시] 전원 직업 : 결과 창용이라며 미리 보냄 (화면엔 안 보여도 클라 메모리에 있음) */
 	};
 
 	/* 로비 접속자 */
