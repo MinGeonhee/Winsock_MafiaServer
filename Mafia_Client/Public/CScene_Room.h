@@ -89,7 +89,7 @@ namespace MafiaClient
 		int							m_iLastCount{ 0 };		/* 마지막으로 띄운 초 (같은 초를 두 번 띄우지 않게) */
 
 		/* 게임 중 (서버가 알려준 값 그대로 : 클라는 판정하지 않음) */
-		Protocol::JOB				m_eJob{ Protocol::JOB::UNKNOWN };		/* 내 직업 */
+		Net::Protected<Protocol::JOB>	m_eJob{ Protocol::JOB::UNKNOWN };	/* 내 직업 : 메모리에 그대로 두지 않음 (값 검색으로 직업 바꾸기 탐지) */
 		Protocol::GAME_PHASE		m_ePhase{ Protocol::GAME_PHASE::END };	/* 지금 단계 */
 		ULONGLONG					m_ullPhaseEnd{ 0 };		/* 이번 단계가 끝나는 시각 (내 시계 기준, 표시용) */
 		int							m_iLastRemainSec{ -1 };	/* 마지막으로 그린 남은 초 */

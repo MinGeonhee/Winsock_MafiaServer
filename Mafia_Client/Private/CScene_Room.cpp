@@ -97,6 +97,9 @@ namespace MafiaClient
 	{
 		__super::Enter();
 
+		/* 내 직업 값이 메모리에서 바뀌면 꺼낼 때 알림 (실제 판정은 서버가 하므로 화면 알림만) */
+		Net::Protected<Protocol::JOB>::s_fnOnTampered = [this] { Show_Notice(L"메모리 변조가 감지되었습니다"); };
+
 		Apply_RoomInfo();
 		m_tView.vecChats.push_back({ L"", L"방에 들어왔습니다", false, true });
 
@@ -107,6 +110,7 @@ namespace MafiaClient
 
 	void CScene_Room::Exit()
 	{
+		Net::Protected<Protocol::JOB>::s_fnOnTampered = nullptr;
 	}
 
 	void CScene_Room::Pre_Update()
