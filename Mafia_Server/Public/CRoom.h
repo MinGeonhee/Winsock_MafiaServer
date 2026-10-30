@@ -73,11 +73,20 @@ namespace MafiaServer
 		void			Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServere);
 
 		/* 투표 : 보낸 사람 자리를 찾아 로직에 넘김 (iSeat = NONE_SEAT 이면 무효표) */
-		void			Vote(Net::ClientKey iVoterKey, uint8_t iSeat);
+		void			Vote(Net::ClientKey iVoterKey, INT32 iSeat);
 		void			LastVote(Net::ClientKey iVoterKey, bool is);
+		void			Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction);	/* 보낸 사람 자리를 찾아 로직에 넘김 */
 
 		/* 방안의 모든 사람에게 패킷보내기 */
 		void			SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen, Net::CServer* pMainServer) const;
+
+		/* 자리 번호로 보내기 (게임 로직용) : 자리 → 키는 Room이 바꿈, 빈자리 · 나간 사람은 건너뜀 */
+		void			Send_ToSeat(INT32 iSeat, Protocol::PACKET_TYPE eType, const void* pBody, uint16_t usLen) const;
+		void			Send_ToAll(Protocol::PACKET_TYPE eType, const void* pBody, uint16_t usLen) const;
+		template<class T>
+		void			Send_ToSeat(INT32 iSeat, Protocol::PACKET_TYPE eType, const T& tBody) const { Send_ToSeat(iSeat, eType, &tBody, static_cast<uint16_t>(sizeof(T))); }
+		template<class T>
+		void			Send_ToAll(Protocol::PACKET_TYPE eType, const T& tBody) const { Send_ToAll(eType, &tBody, static_cast<uint16_t>(sizeof(T))); }
 
 	private:
 		void			Change_Master();

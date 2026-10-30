@@ -16,7 +16,7 @@ namespace Protocol
 	constexpr size_t   MAX_ROOMNAME_LEN = 20;
 	constexpr size_t   MAX_ROOMNAME_BUF = 32;
 	constexpr uint16_t MAX_ROOM_PLAYER	= 7;
-	constexpr uint16_t MIN_START_PLAYER	= 2;		// 게임 시작 최소 인원 (테스트용 2, 실제는 7로)
+	constexpr uint16_t MIN_START_PLAYER	= 5;		// 게임 시작 최소 인원 (직업 덱 5인 기본)
 	constexpr uint32_t START_COUNTDOWN_MS = 5000;	// 시작 승인 후 실제 게임까지 (서버 판정 · 클라 표시 공용)
 
 	constexpr uint16_t MAX_ROOM_PACKET_COUNT = 10;
@@ -25,12 +25,24 @@ namespace Protocol
 	constexpr uint16_t MAX_CHAT_LEN = 100;
 	constexpr uint16_t MAX_CHAT_BUF = 128;
 
+	/* ---------------- 투표 (비공개 : 결과만 공개) ---------------- */
+	constexpr INT32   NONE_SEAT = -2;			/* 자리 없음 : 패킷에도 그대로 실림 (무효표 / 동점 · 0표 → 처형 없음) */
+	constexpr INT32   NONE_VOTE = -1;		/* 아직 투표 안 함 */
+	constexpr INT32   YES = 1;
+	constexpr INT32   NO  = 2;
+
 	/* 마피아 직업관련 */
 	enum class JOB : uint16_t
 	{
-		UNKNOWN = 0,    // 모름 (남의 직업을 아직 모를 때)
-		CITIZEN,		// 시민
-		MAFIA,			// 마피아
+		UNKNOWN = 0,	// 모름 (클라 : 아직 직업을 받기 전)
+		MAFIA,			// 마피아 => 밤마다 한명을 찾아서 죽일 수 있음
+		PRESIDENT,		// 대통령 => 투표로 연행되지 않음 + 찬반 2표
+		SNOOP,			// 탐정	  => 밤마다 한명을 지정해 조사할 수 있음 단, 직업은 모르며 해당 인원이 마피아인지 아닌지만 알 수 있음
+		BODYGUARD,		// 경호원  => 밤마다 한명을 지정하여 방어가능
+		MEDIUM,			// 영매	  => 밤마다 죽은 사람 한명의 직업 확인
+		SOLDIER,		// 군인	  => 마피아 공격을 1회 버팀
+		BETRAYER,		// 배신자  => 밤에 단 1회 다른 플레이어의 직업 확인가능, 매일 마피아와의 접촉 시도 가능
+		CITIZEN,		// 시민 (덱엔 없음)
 		END
 	};
 
@@ -94,8 +106,10 @@ namespace Protocol
 		C_TO_S_VOTE,						// 클라->서버 투표 (VOTE 단계, 고른 자리)
 		C_TO_S_LAST_VOTE,					// 클라->서버 최수의 투표 (LAST_VOTE 단계)
 		S_TO_C_VOTE_RESULT,					// 서버->클라 투표 결과 (처형 대상 자리, 없으면 NONE_SEAT) → 방 전원
-		S_TO_C_LASTVOTE_RESULT,				// 클라->서버 찬반 투표 (LAST_VOTE 단계)
-		S_TO_C_GAME_END,					// 클라->서버 찬반 투표 (LAST_VOTE 단계)
+		S_TO_C_LASTVOTE_RESULT,				// 서버->클라 찬반 결과 (연행된 자리, 없으면 NONE_SEAT) → 방 전원
+		S_TO_C_GAME_END,					// 서버->클라 게임 끝 (이긴 팀 + 자리별 직업) → 방 전원
+		C_TO_S_JOB_ACTION,					// 클라->서버 직업 능력 (본문 = JOB_ACTION 머리 + 직업별 구조체)
+		S_TO_C_NIGHT_RESULT,				// 서버->클라 밤 결과 (죽은 자리) → 방 전원
 		END
 	};
 
@@ -106,6 +120,10 @@ namespace Protocol
 		CHAT_LOG,				// 방 채팅 한 줄 (LOBBY_ROOMS와 번호가 겹치면 받는 쪽에서 구분 못 함)
 		GAME_VOTE,				// 투표 단일 결과
 		GAME_LASTVOTE,			// 찬반 투표 한 단일결과
+		SNOOP_RESULT,			// 탐정 조사 결과 (본인만)
+		MEDIUM_RESULT,			// 영매 결과 (본인만)
+		BETRAYER_RESULT,		// 배신자 확인 · 접촉 결과 (본인만)
+		PRESIDENT_NOTICE,		// 대통령 공지 (방 전원)
 		END
 	};
 

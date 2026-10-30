@@ -34,8 +34,9 @@ namespace MafiaServer
 		/* 이 사람이 있는 방에서 빼기 (비면 방 삭제). 반환 : 나간 방 키 (방에 없었으면 0) */
 		Protocol::ROOM_KEY	Exit_Room(Net::ClientKey iExitPlayerClientKey);
 		void				Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer);
-		void				Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, uint8_t iSeat);
+		void				Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, INT32 iSeat);
 		void				LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is);
+		void				Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction);	/* 방 키는 tAction.iRoomKey */
 
 		/* 게임 시작 승인된 방 : 로딩(카운트다운) 시작 */
 		bool				Start_Loading(Protocol::ROOM_KEY iRoomKey, ULONGLONG ullNow);

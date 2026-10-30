@@ -78,7 +78,7 @@ namespace MafiaServer
 		m_umapRooms[iRoomKey]->Chatting(tTime,iChatterKey,wstrText,pMainServer);
 	}
 
-	void CRoomManager::Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, uint8_t iSeat)
+	void CRoomManager::Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, INT32 iSeat)
 	{
 		auto iter = m_umapRooms.find(iRoomKey);
 		if (iter == m_umapRooms.end()) return;
@@ -91,6 +91,14 @@ namespace MafiaServer
 		if (iter == m_umapRooms.end()) return;
 		iter->second->LastVote(iVoterKey,is);
 	}
+
+	void CRoomManager::Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction)
+	{
+		auto iter = m_umapRooms.find(tAction.iRoomKey);
+		if (iter == m_umapRooms.end()) return;
+		iter->second->Use_Skill(iUserKey, tAction);
+	}
+
 
 	bool CRoomManager::Start_Loading(Protocol::ROOM_KEY iRoomKey, ULONGLONG ullNow)
 	{

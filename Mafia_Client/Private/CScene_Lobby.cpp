@@ -193,6 +193,16 @@ namespace MafiaClient
 			m_isEntered = true;
 			break;
 		}
+		/* 입장 응답을 받고 방 화면으로 넘어가기 전 (연출 시간) 에 자리가 바뀌면 : 들고 갈 방 정보에 반영 (안 하면 그 사이 들어온 사람이 빠짐) */
+		case Protocol::PACKET_TYPE::S_TO_C_ROOM_MEMBERS:
+		{
+			if (!m_isEntered || tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_ROOM_MEMBERS)) break;
+			Protocol::S_TO_C_ROOM_MEMBERS tMembers{};
+			memcpy(&tMembers, tEvent.Get_Body(), sizeof(tMembers));
+			m_tEnterInfo.iMasterKey = tMembers.iMasterKey;
+			memcpy(m_tEnterInfo.arrSeats, tMembers.arrSeats, sizeof(m_tEnterInfo.arrSeats));
+			break;
+		}
 		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:
 		{
 			const Protocol::PROVIDE_DATA* pData = reinterpret_cast<const Protocol::PROVIDE_DATA*>(tEvent.Get_Body());

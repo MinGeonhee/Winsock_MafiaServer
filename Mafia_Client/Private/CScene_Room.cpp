@@ -15,17 +15,48 @@ namespace MafiaClient
 			{
 			case Protocol::JOB::CITIZEN:	return L"시민";
 			case Protocol::JOB::MAFIA:		return L"마피아";
+			case Protocol::JOB::PRESIDENT:	return L"대통령";
+			case Protocol::JOB::SNOOP:		return L"탐정";
+			case Protocol::JOB::BODYGUARD:	return L"경호원";
+			case Protocol::JOB::MEDIUM:		return L"영매";
+			case Protocol::JOB::SOLDIER:	return L"군인";
+			case Protocol::JOB::BETRAYER:	return L"배신자";
 			default:						return L"?";
 			}
 		}
 
-		/* 의자 위에 띄우는 직업 (아이콘 + 이름) */
+		/* 의자 위에 띄우는 직업 (아이콘 + 이름) : 아이콘은 Char_Width가 2칸으로 세는 범위(U+1F300 ~)만 */
 		std::wstring Job_Role(Protocol::JOB eJob)
 		{
 			switch (eJob)
 			{
 			case Protocol::JOB::CITIZEN:	return L"👤 시민";
 			case Protocol::JOB::MAFIA:		return L"🔪 마피아";
+			case Protocol::JOB::PRESIDENT:	return L"👑 대통령";
+			case Protocol::JOB::SNOOP:		return L"🔍 탐정";
+			case Protocol::JOB::BODYGUARD:	return L"💂 경호원";
+			case Protocol::JOB::MEDIUM:		return L"🔮 영매";
+			case Protocol::JOB::SOLDIER:	return L"🔫 군인";
+			case Protocol::JOB::BETRAYER:	return L"🎭 배신자";
+			default:						return L"";
+			}
+		}
+
+		/* 빨간 글씨 = 마피아 팀 */
+		bool Is_RedJob(Protocol::JOB eJob) { return eJob == Protocol::JOB::MAFIA || eJob == Protocol::JOB::BETRAYER; }
+
+		/* 직업 설명 (게임 시작 때 채팅에 한 줄) */
+		const wchar_t* Job_Desc(Protocol::JOB eJob)
+		{
+			switch (eJob)
+			{
+			case Protocol::JOB::MAFIA:		return L"밤마다 한 명을 처치합니다";
+			case Protocol::JOB::PRESIDENT:	return L"투표로 연행되지 않고, 밤마다 방 전원에게 공지를 남길 수 있습니다";
+			case Protocol::JOB::SNOOP:		return L"둘째 밤부터 밤마다 한 명이 마피아인지 조사합니다";
+			case Protocol::JOB::BODYGUARD:	return L"밤마다 한 명을 마피아로부터 지킵니다";
+			case Protocol::JOB::MEDIUM:		return L"밤마다 죽은 사람 한 명의 직업을 봅니다";
+			case Protocol::JOB::SOLDIER:	return L"마피아의 공격을 한 번 버팁니다";
+			case Protocol::JOB::BETRAYER:	return L"한 번 직업을 확인하고, 밤마다 마피아와 접선을 시도합니다";
 			default:						return L"";
 			}
 		}
@@ -35,12 +66,12 @@ namespace MafiaClient
 			switch (ePhase)
 			{
 			case Protocol::GAME_PHASE::NIGHT:			return L"밤";
-			case Protocol::GAME_PHASE::LOADING_DAY:		return L"아침이 밝아옵니다";
+			case Protocol::GAME_PHASE::LOADING_DAY:		return L"동틀 녘";
 			case Protocol::GAME_PHASE::DAY:				return L"아침";
 			case Protocol::GAME_PHASE::VOTE:			return L"투표";
 			case Protocol::GAME_PHASE::ALLOCUTION:		return L"최후의 변론";
 			case Protocol::GAME_PHASE::LAST_VOTE:		return L"찬반 투표";
-			case Protocol::GAME_PHASE::LOADING_NIGHT:	return L"밤이 찾아옵니다";
+			case Protocol::GAME_PHASE::LOADING_NIGHT:	return L"해 질 녘";
 			default:									return L"";
 			}
 		}
@@ -132,6 +163,7 @@ namespace MafiaClient
 			{
 			case Protocol::GAME_PHASE::VOTE:		Key_Vote(tKey);		break;		/* 1 ~ 7만 (채팅 X) */
 			case Protocol::GAME_PHASE::LAST_VOTE:	Key_LastVote(tKey);	break;		/* Y / N만 (채팅 X) */
+			case Protocol::GAME_PHASE::NIGHT:		Key_Night(tKey);	break;		/* 능력 고르기 / 공지 / 마피아 채팅 */
 			default:								Edit_Chat(tKey);	break;		/* 잠겨 있으면 Edit_Chat이 무시 */
 			}
 		}
@@ -183,48 +215,309 @@ namespace MafiaClient
 
 	void CScene_Room::Key_Vote(const KEY_EVENT_RECORD& tKey)
 	{
-		/* 숫자 = 고르기만 (바꿀 수 있음), Enter = 확정해서 보냄 (한 번만) */
-		if (m_tView.isVoteDone) return;
+		if (!Key_Pick(tKey, Vote_Candidates())) return;
+
+		Protocol::C_TO_S_VOTE tBody{};		/* 무효표면 NONE_SEAT 그대로 */
+		tBody.iRoomKey = m_tRoomInfo.iRoomKey;
+		if (m_tView.iVoteSel >= 0) tBody.iVoteSeat = m_tView.iVoteSel;
+		m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_VOTE), tBody);
+		m_tView.isVoteDone = true;
+		m_tView.strHelp.clear();			/* 더는 못 바꿈 : 조작 안내 지우기 */
+		m_isDirty = true;
+	}
+
+	bool CScene_Room::Key_Pick(const KEY_EVENT_RECORD& tKey, const std::vector<int>& vecCand)
+	{
+		/* 숫자 · ←→ = 고르기만 (바꿀 수 있음), Enter = 확정 (한 번만 : 보내는 건 부른 쪽) */
+		if (m_tView.isVoteDone) return false;
 
 		if (tKey.wVirtualKeyCode == VK_RETURN)
 		{
-			if (m_tView.iVoteSel == ConsoleUI::RoomScreenView::VOTE_NONE) { Show_Notice(L"먼저 번호를 고르세요"); return; }
-
-			Protocol::C_TO_S_VOTE tBody{};		/* 무효표면 NONE_SEAT 그대로 */
-			tBody.iRoomKey = m_tRoomInfo.iRoomKey;
-			if (m_tView.iVoteSel >= 0) tBody.iVoteSeat = static_cast<uint8_t>(m_tView.iVoteSel);
-			m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_VOTE), tBody);
-			m_tView.isVoteDone = true;
-			m_isDirty = true;
-			return;
+			if (m_tView.iVoteSel == ConsoleUI::RoomScreenView::VOTE_NONE) { Show_Notice(L"먼저 번호를 고르세요"); return false; }
+			return true;
 		}
 
-		/* ←→ : 후보 안에서 시계 방향으로 돌기 (끝에서 넘어가면 처음으로) */
-		if (tKey.wVirtualKeyCode == VK_LEFT || tKey.wVirtualKeyCode == VK_RIGHT)
+		/* ←→ (↑↓) : 후보 안에서 다음 / 이전 (끝에서 넘어가면 처음으로) */
+		const WORD wVK = tKey.wVirtualKeyCode;
+		if (wVK == VK_LEFT || wVK == VK_RIGHT || wVK == VK_UP || wVK == VK_DOWN)
 		{
-			const std::vector<int> vecCand = Vote_Candidates();
 			const int iCount = static_cast<int>(vecCand.size());
+			if (iCount == 0) return false;
 			const auto iter = std::find(vecCand.begin(), vecCand.end(), m_tView.iVoteSel);
 			int iIdx = (iter == vecCand.end()) ? 0 : static_cast<int>(iter - vecCand.begin());
-			iIdx = (iIdx + (tKey.wVirtualKeyCode == VK_RIGHT ? 1 : iCount - 1)) % iCount;
+			iIdx = (iIdx + ((wVK == VK_RIGHT || wVK == VK_DOWN) ? 1 : iCount - 1)) % iCount;
 			m_tView.iVoteSel = vecCand[iIdx];
 			m_isDirty = true;
-			return;
+			return false;
 		}
 
-		/* 숫자 : 그 자리로 바로 (0 = 무효표) */
+		/* 숫자 : 그 자리로 바로 (0 = 무효표, 투표만) */
 		const wchar_t ch = tKey.uChar.UnicodeChar;
-		if (ch == L'0')
+		if (ch == L'0' && m_tView.isPickAbstain)
 			m_tView.iVoteSel = ConsoleUI::RoomScreenView::VOTE_ABSTAIN;
 		else if (ch >= L'1' && ch <= L'0' + Protocol::MAX_ROOM_PLAYER)
 		{
 			const int iSeat = ch - L'1';					/* 화면 1 ~ 7 → 자리 0 ~ 6 */
-			if (m_tView.arrSeats[iSeat].strName.empty())	{ Show_Notice(L"빈 자리입니다"); return; }
-			if (iSeat == m_iMySeat)							{ Show_Notice(L"자신에게는 투표할 수 없습니다"); return; }
-			if (!Is_Alive(iSeat))							{ Show_Notice(L"죽은 사람에게는 투표할 수 없습니다"); return; }
+			if (std::find(vecCand.begin(), vecCand.end(), iSeat) == vecCand.end())
+			{
+				if (m_tView.arrSeats[iSeat].strName.empty())	Show_Notice(L"빈 자리입니다");
+				else if (iSeat == m_iMySeat)					Show_Notice(L"자신은 고를 수 없습니다");
+				else if (!Is_Alive(iSeat))						Show_Notice(L"죽은 사람은 고를 수 없습니다");
+				else											Show_Notice(L"고를 수 없는 자리입니다");
+				return false;
+			}
 			m_tView.iVoteSel = iSeat;
 		}
-		else return;
+		else return false;
+		m_isDirty = true;
+		return false;
+	}
+
+	std::vector<CScene_Room::NIGHT_MODE> CScene_Room::Night_Modes() const
+	{
+		std::vector<NIGHT_MODE> vecModes;
+		if (!Is_Alive(m_iMySeat)) return vecModes;
+
+		switch (m_eJob)
+		{
+		case Protocol::JOB::MAFIA:		if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::KILL);	vecModes.push_back(NIGHT_MODE::CHAT);	break;
+		case Protocol::JOB::SNOOP:		if (!m_isSkillDone && m_tView.iDay >= 1) vecModes.push_back(NIGHT_MODE::SNOOP);	break;	/* 첫날 밤엔 조사 불가 (서버도 막음) */
+		case Protocol::JOB::BODYGUARD:	if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::GUARD);	break;
+		case Protocol::JOB::MEDIUM:		if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::MEDIUM);	break;
+		case Protocol::JOB::PRESIDENT:	if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::NOTICE);	break;
+		case Protocol::JOB::BETRAYER:	/* 직업 확인(게임 중 1회)과 접선(밤마다)은 따로 : 같은 밤에 둘 다 가능 */
+			if (!m_isFindJobUsed)					vecModes.push_back(NIGHT_MODE::FIND_JOB);
+			if (!m_isContacted && !m_isSkillDone)	vecModes.push_back(NIGHT_MODE::CONTACT);
+			if (m_isContacted)						vecModes.push_back(NIGHT_MODE::CHAT);
+			break;
+		default: break;		/* 군인 · 시민 : 밤에 할 일 없음 */
+		}
+		return vecModes;
+	}
+
+	std::vector<int> CScene_Room::Night_Candidates() const
+	{
+		std::vector<int> vecCand;
+		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+		{
+			if (m_tView.arrSeats[i].strName.empty()) continue;
+			switch (m_eNightMode)
+			{
+			case NIGHT_MODE::GUARD:		if (Is_Alive(i)) vecCand.push_back(i);						break;	/* 자기 자신도 지킬 수 있음 */
+			case NIGHT_MODE::MEDIUM:	if (!Is_Alive(i)) vecCand.push_back(i);						break;	/* 죽은 사람만 */
+			case NIGHT_MODE::KILL:
+			case NIGHT_MODE::SNOOP:
+			case NIGHT_MODE::FIND_JOB:
+			case NIGHT_MODE::CONTACT:	if (Is_Alive(i) && i != m_iMySeat) vecCand.push_back(i);	break;
+			default: break;
+			}
+		}
+		return vecCand;
+	}
+
+	void CScene_Room::Key_Night(const KEY_EVENT_RECORD& tKey)
+	{
+		if (!Is_Alive(m_iMySeat)) return;
+
+		/* Tab : 다음 모드 (지금 모드가 끝나서 목록에 없으면 첫 모드로) */
+		if (tKey.wVirtualKeyCode == VK_TAB)
+		{
+			const std::vector<NIGHT_MODE> vecModes = Night_Modes();
+			if (vecModes.empty()) return;
+			const auto iter = std::find(vecModes.begin(), vecModes.end(), m_eNightMode);
+			if (iter != vecModes.end() && vecModes.size() == 1) return;
+			const size_t iNext = (iter == vecModes.end()) ? 0 : (static_cast<size_t>(iter - vecModes.begin()) + 1) % vecModes.size();
+			Apply_NightMode(vecModes[iNext]);
+			return;
+		}
+
+		switch (m_eNightMode)
+		{
+		case NIGHT_MODE::CHAT:
+			Edit_Chat(tKey);
+			break;
+		case NIGHT_MODE::NOTICE:		/* 대통령 : 입력 줄에 공지를 써서 Enter */
+		{
+			if (m_isSkillDone) break;
+			const ConsoleUI::LINE_INPUT eInput = ConsoleUI::Edit_Line(m_tView.strInput, tKey, MAX_CHAT_LEN);
+			if (eInput == ConsoleUI::LINE_INPUT::CHANGED) m_isDirty = true;
+			if (eInput != ConsoleUI::LINE_INPUT::SUBMIT || m_tView.strInput.empty()) break;
+
+			Protocol::PRESIDENT_ACTION tBody{};
+			tBody.iRoomKey	= m_tRoomInfo.iRoomKey;
+			tBody.eJob		= m_eJob;
+			wcsncpy_s(tBody.tNotice.wszText, m_tView.strInput.c_str(), _TRUNCATE);
+			m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_JOB_ACTION), tBody);
+
+			m_isSkillDone			= true;
+			m_tView.strInput.clear();
+			m_tView.strHelp.clear();
+			m_tView.strInputLock	= L"공지를 보냈습니다. 아침까지 기다려 주세요";
+			m_isDirty				= true;
+			break;
+		}
+		default:						/* 고르기 막대 */
+			if (Key_Pick(tKey, Night_Candidates())) Send_Skill();
+			break;
+		}
+	}
+
+	void CScene_Room::Apply_NightMode(NIGHT_MODE eMode)
+	{
+		m_eNightMode = eMode;
+		const bool isPick = (eMode != NIGHT_MODE::CHAT && eMode != NIGHT_MODE::NOTICE);
+
+		const wchar_t* szVerb = L"";
+		int iColor = 0;
+		switch (eMode)
+		{
+		case NIGHT_MODE::KILL:		szVerb = L"처치";	iColor = 0;	break;
+		case NIGHT_MODE::SNOOP:		szVerb = L"조사";	iColor = 2;	break;
+		case NIGHT_MODE::GUARD:		szVerb = L"경호";	iColor = 1;	break;
+		case NIGHT_MODE::MEDIUM:	szVerb = L"확인";	iColor = 2;	break;
+		case NIGHT_MODE::FIND_JOB:	szVerb = L"확인";	iColor = 2;	break;
+		case NIGHT_MODE::CONTACT:	szVerb = L"접선";	iColor = 0;	break;
+		default: break;
+		}
+
+		const std::vector<int> vecCand = isPick ? Night_Candidates() : std::vector<int>{};
+		m_tView.strInput.clear();
+		m_tView.isVoting		= isPick;
+		m_tView.isVoteDone		= false;
+		m_tView.isPickAbstain	= false;
+		m_tView.strPickVerb		= szVerb;
+		m_tView.iPickColor		= iColor;
+		m_tView.iVoteSel		= vecCand.empty() ? ConsoleUI::RoomScreenView::VOTE_NONE : vecCand.front();
+		m_tView.iPickMask		= 0;
+		for (int iSeat : vecCand) m_tView.iPickMask |= static_cast<uint8_t>(1u << iSeat);	/* 목록에서 고를 수 있는 줄 */
+		m_tView.strInputLabel	= (eMode == NIGHT_MODE::NOTICE) ? L"공지 ▸ " : L"▸ ";
+		m_tView.strInputLock	= isPick ? L"능력을 쓰는 중입니다" : L"";		/* 막대가 대신 그려짐 */
+
+		/* 안내 : [Tab] (모드가 둘 이상) + 모드별 조작 */
+		std::wstring strHelp = (Night_Modes().size() > 1) ? L"[Tab] 모드 바꾸기   " : L"";
+		switch (eMode)
+		{
+		case NIGHT_MODE::CHAT:		strHelp += L"밤 채팅은 마피아 편끼리만 보입니다";				break;
+		case NIGHT_MODE::NOTICE:	strHelp += L"공지를 쓰고 [Enter] → 방 전원에게 보입니다";		break;
+		case NIGHT_MODE::FIND_JOB:	strHelp += L"(게임 중 한 번) 직업 확인   ";						[[fallthrough]];
+		default:
+			strHelp += vecCand.empty() ? L"고를 수 있는 사람이 없습니다"
+									   : L"[↑↓] 고르기   [1~7] 바로 고르기   [Enter] " + std::wstring(szVerb);
+			break;
+		}
+		m_tView.strHelp = strHelp;
+		m_isDirty = true;
+	}
+
+	void CScene_Room::Send_Skill()
+	{
+		const int iSel = m_tView.iVoteSel;
+		if (iSel < 0) return;
+
+		/* 직업별 구조체 : 머리(방 키 · 직업) + 대상. 서버가 길이 · 직업을 다시 확인 */
+		auto Send = [&](auto& tBody)
+		{
+			tBody.iRoomKey		= m_tRoomInfo.iRoomKey;
+			tBody.eJob			= m_eJob;
+			tBody.tTarget.iSeat	= iSel;
+			m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_JOB_ACTION), tBody);
+		};
+		switch (m_eNightMode)
+		{
+		case NIGHT_MODE::KILL:		{ Protocol::MAFIA_ACTION		tBody{}; Send(tBody); break; }
+		case NIGHT_MODE::SNOOP:		{ Protocol::SNOOP_ACTION		tBody{}; Send(tBody); break; }
+		case NIGHT_MODE::GUARD:		{ Protocol::BODYGUARD_ACTION	tBody{}; Send(tBody); break; }
+		case NIGHT_MODE::MEDIUM:	{ Protocol::MEDIUM_ACTION		tBody{}; Send(tBody); break; }
+		case NIGHT_MODE::FIND_JOB:
+		case NIGHT_MODE::CONTACT:	{ Protocol::BETRAYER_ACTION		tBody{}; tBody.isContact = (m_eNightMode == NIGHT_MODE::CONTACT); Send(tBody); break; }
+		default: return;
+		}
+
+		if (m_eNightMode == NIGHT_MODE::FIND_JOB)	m_isFindJobUsed = true;
+		else										m_isSkillDone = true;
+		m_tView.isVoteDone	= true;
+		m_tView.strHelp		= (Night_Modes().empty()) ? L"" : L"[Tab] 모드 바꾸기";
+		m_isDirty			= true;
+	}
+
+	void CScene_Room::Know_Job(int iSeat, Protocol::JOB eJob)
+	{
+		if (iSeat < 0 || iSeat >= Protocol::MAX_ROOM_PLAYER) return;
+		m_arrKnownJob[iSeat] = eJob;
+		Apply_RoomInfo();
+	}
+
+	void CScene_Room::On_JobData(const Net::Event& tEvent, Protocol::DATA_TYPE eType)
+	{
+		/* 자리 → "3번 민수" */
+		auto Seat_Name = [&](INT32 iSeat) -> std::wstring
+		{
+			if (iSeat < 0 || iSeat >= Protocol::MAX_ROOM_PLAYER) return L"?";
+			return m_tView.arrSeats[iSeat].strName;		/* 게임 중이라 "N번" */
+		};
+
+		switch (eType)
+		{
+		case Protocol::DATA_TYPE::SNOOP_RESULT:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::SNOOP_RESULT)) return;
+			Protocol::SNOOP_RESULT tResult{}; memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
+			const INT32 iSeat = tResult.tTarget.iSeat;
+			if (iSeat < 0 || iSeat >= Protocol::MAX_ROOM_PLAYER) return;
+
+			m_arrKnownMafia[iSeat] = tResult.isMafia;
+			m_arrKnownClean[iSeat] = !tResult.isMafia;
+			m_tView.vecChats.push_back({ L"", L"🔍 조사 결과 : " + Seat_Name(iSeat) + (tResult.isMafia ? L" 님은 마피아입니다!" : L" 님은 마피아가 아닙니다"), false, true });
+			Apply_RoomInfo();
+			break;
+		}
+		case Protocol::DATA_TYPE::MEDIUM_RESULT:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::MEDIUM_RESULT)) return;
+			Protocol::MEDIUM_RESULT tResult{}; memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
+			m_tView.vecChats.push_back({ L"", L"🔮 " + Seat_Name(tResult.tTarget.iSeat) + L" 님의 직업은 " + Job_Name(tResult.eJob) + L" 이었습니다", false, true });
+			Know_Job(tResult.tTarget.iSeat, tResult.eJob);
+			break;
+		}
+		case Protocol::DATA_TYPE::BETRAYER_RESULT:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::BETRAYER_RESULT)) return;
+			Protocol::BETRAYER_RESULT tResult{}; memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
+			const INT32 iSeat = tResult.tTarget.iSeat;
+
+			if (m_eJob == Protocol::JOB::MAFIA)		/* 마피아가 받음 = 배신자가 접선해 옴 (tTarget = 배신자 자리) */
+			{
+				m_isContacted = true;
+				m_tView.vecChats.push_back({ L"", L"🎭 배신자 " + Seat_Name(iSeat) + L" 님이 접선했습니다. 밤에 같이 대화할 수 있습니다", false, true });
+				Know_Job(iSeat, Protocol::JOB::BETRAYER);
+			}
+			else if (!tResult.isContact)			/* 배신자 직업 확인 */
+			{
+				m_tView.vecChats.push_back({ L"", L"🎭 " + Seat_Name(iSeat) + L" 님의 직업은 " + Job_Name(tResult.eJob) + L" 입니다", false, true });
+				Know_Job(iSeat, tResult.eJob);
+			}
+			else if (tResult.isSucceeded)			/* 접선 성공 : 바로 마피아와 채팅 */
+			{
+				m_isContacted = true;
+				m_tView.vecChats.push_back({ L"", L"🎭 접선 성공! " + Seat_Name(iSeat) + L" 님이 마피아입니다. 이제 밤에 같이 대화할 수 있습니다", false, true });
+				Know_Job(iSeat, Protocol::JOB::MAFIA);
+				if (m_ePhase == Protocol::GAME_PHASE::NIGHT) Apply_NightMode(NIGHT_MODE::CHAT);
+			}
+			else
+				m_tView.vecChats.push_back({ L"", L"🎭 접선 실패 : " + Seat_Name(iSeat) + L" 님은 마피아가 아닙니다", false, true });
+			break;
+		}
+		case Protocol::DATA_TYPE::PRESIDENT_NOTICE:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::PRESIDENT_NOTICE)) return;
+			Protocol::PRESIDENT_NOTICE tNotice{}; memcpy(&tNotice, tEvent.Get_Body(), sizeof(tNotice));
+			tNotice.tNotice.wszText[Protocol::MAX_CHAT_BUF - 1] = L'\0';
+			m_tView.strPresident = tNotice.tNotice.wszText;		/* 왼쪽 위 띠 (채팅엔 안 올림, 새 공지가 오면 바뀜) */
+			Show_Notice(L"대통령 공지가 도착했습니다");
+			break;
+		}
+		default: return;
+		}
 		m_isDirty = true;
 	}
 
@@ -288,11 +581,20 @@ namespace MafiaClient
 		m_tView.iVoteSel	= m_tView.isVoting ? Vote_Candidates().front() : ConsoleUI::RoomScreenView::VOTE_NONE;	/* 첫 후보부터 */
 		m_tView.isVoteDone	= false;
 		m_tView.strTally.clear();
+		m_tView.strPickVerb		= L"투표";		/* 막대 기본 = 투표 (밤이면 Apply_NightMode가 바꿈) */
+		m_tView.iPickColor		= 0;
+		m_tView.isPickAbstain	= true;
+		m_tView.strInputLabel	= L"▸ ";
+		m_tView.isVoteTable		= (ePhase == Protocol::GAME_PHASE::VOTE || ePhase == Protocol::GAME_PHASE::LAST_VOTE);
+		m_tView.isSeatList		= (ePhase == Protocol::GAME_PHASE::NIGHT || ePhase == Protocol::GAME_PHASE::VOTE);	/* 밤 · 투표 : 원탁 대신 자리 목록 */
+		m_tView.iPickMask		= 0;
 
 		switch (ePhase)
 		{
 		case Protocol::GAME_PHASE::VOTE:
-			if (m_tView.isVoting) m_tView.strHelp = L"[←→] 고르기   [1~7] 바로 고르기   [0] 무효표   [Enter] 투표";
+			if (m_tView.isVoting) m_tView.strHelp = L"[↑↓] 고르기   [1~7] 바로 고르기   [0] 무효표   [Enter] 투표";
+			for (int iSeat : Vote_Candidates())		/* 목록에서 고를 수 있는 줄 (무효표 줄은 따로) */
+				if (iSeat >= 0) m_tView.iPickMask |= static_cast<uint8_t>(1u << iSeat);
 			m_tView.strInputLock	= L"투표 중에는 채팅을 칠 수 없습니다";		/* 막대가 대신 그려짐 (채팅 잠금 표시용) */
 			for (int i = 0; i < static_cast<int>(m_tView.arrSeats.size()); ++i)	/* 살아 있는 의자 아래 "투표 : 0 표" (단계 바뀌면 Apply_RoomInfo가 지움) */
 				if (!m_tView.arrSeats[i].strName.empty() && Is_Alive(i)) m_tView.arrSeats[i].iVotes = 0;
@@ -308,12 +610,17 @@ namespace MafiaClient
 			m_tView.strHelp			= m_isLastVoteDone ? L"찬반 투표가 진행 중입니다" : L"[Y] 찬성  [N] 반대";
 			m_tView.strInputLock	= L"찬반 투표 중에는 채팅을 칠 수 없습니다";
 			break;
-		case Protocol::GAME_PHASE::NIGHT:
-			if (m_eJob == Protocol::JOB::MAFIA)
-				m_tView.strHelp		= L"밤 채팅은 마피아끼리만 보입니다";
+		case Protocol::GAME_PHASE::NIGHT:		/* 직업별 능력 막대 / 공지 / 마피아 채팅 (첫 모드부터) */
+		{
+			m_isSkillDone = false;
+			const std::vector<NIGHT_MODE> vecModes = Night_Modes();
+			if (vecModes.empty())
+				m_tView.strInputLock	= (m_eJob == Protocol::JOB::SNOOP && m_tView.iDay < 1 && Is_Alive(m_iMySeat))
+										? L"탐정은 둘째 밤부터 조사할 수 있습니다" : L"밤에는 채팅을 칠 수 없습니다";
 			else
-				m_tView.strInputLock	= L"밤에는 채팅을 칠 수 없습니다";
+				Apply_NightMode(vecModes.front());
 			break;
+		}
 		case Protocol::GAME_PHASE::LOADING_DAY:
 		case Protocol::GAME_PHASE::LOADING_NIGHT:
 			m_tView.strInputLock	= L"지금은 채팅을 칠 수 없습니다";
@@ -323,6 +630,7 @@ namespace MafiaClient
 
 		if (!Is_Alive(m_iMySeat))		/* 죽으면 단계와 상관없이 채팅 X (서버도 막음) */
 		{
+			m_tView.isVoting = false;
 			m_tView.strHelp.clear();
 			m_tView.strInputLock	= L"죽은 사람은 채팅을 칠 수 없습니다";
 		}
@@ -354,14 +662,24 @@ namespace MafiaClient
 
 			wchar_t wszNick[Protocol::MAX_NICNAME_BUF]{};
 			wcsncpy_s(wszNick, tSeat.wszNickname, _TRUNCATE);
-			tView.strName	= wszNick;
+			tView.strName	= m_tView.isPlaying ? std::to_wstring(i + 1) + L"번" : std::wstring(wszNick);	/* 게임 중엔 누군지 모르게 자리 번호만 */
 			tView.isMe		= (tSeat.iKey == iMyKey);
 			if (tView.isMe) m_iMySeat = static_cast<int>(i);
-			tView.isMaster	= (tSeat.iKey == tInfo.iMasterKey);
+			tView.isMaster	= !m_tView.isPlaying && (tSeat.iKey == tInfo.iMasterKey);	/* 방장 ★은 대기실에서만 */
 			if (tView.isMe)
 			{
 				tView.strRole	= Job_Role(m_eJob);	/* 내 직업 : 의자 위 (자리가 갱신돼도 유지) */
-				tView.isRoleRed	= (m_eJob == Protocol::JOB::MAFIA);
+				tView.isRoleRed	= Is_RedJob(m_eJob);
+			}
+			else if (m_arrKnownJob[i] != Protocol::JOB::UNKNOWN)	/* 능력으로 알아낸 직업 (영매 · 배신자 · 접선 · 군인 공개) */
+			{
+				tView.strRole	= Job_Role(m_arrKnownJob[i]);
+				tView.isRoleRed	= Is_RedJob(m_arrKnownJob[i]);
+			}
+			else if (m_arrKnownMafia[i] || m_arrKnownClean[i])		/* 탐정 결과 : 직업은 모름 */
+			{
+				tView.strRole	= m_arrKnownMafia[i] ? L"🔍 마피아" : L"🔍 무고";
+				tView.isRoleRed	= m_arrKnownMafia[i];
 			}
 			tView.isDead	= m_tView.isPlaying && !Is_Alive(static_cast<int>(i));
 		}
@@ -411,7 +729,7 @@ namespace MafiaClient
 	{
 		/* 마지막 연행 연출이 있으면 그게 먼저 (연행 → 신문 1면 / 마피아 초상화 순서) */
 		Update_Death();
-		if (m_iDyingSeat >= 0) return;
+		if (m_isFxPlaying) return;
 
 		const ULONGLONG ullNow = GetTickCount64();
 		if (m_ullWinStart == 0) m_ullWinStart = ullNow;
@@ -421,13 +739,13 @@ namespace MafiaClient
 
 	void CScene_Room::Update_Death()
 	{
-		if (m_iDyingSeat < 0) return;
+		if (!m_isFxPlaying) return;
 
 		const int iFrame = static_cast<int>((GetTickCount64() - m_ullDeathStart) / DEATH_FRAME_MS);
-		if (iFrame >= ConsoleUI::RoomScreenView::EXEC_FRAMES)	/* 끝 : 원탁이 다시 보이고 그 의자는 생존 비트대로 회색 + ☠ */
+		if (iFrame >= (m_tView.eNightFx == ConsoleUI::RoomScreenView::NIGHT_FX::NONE ? ConsoleUI::RoomScreenView::EXEC_FRAMES : ConsoleUI::RoomScreenView::NIGHT_FRAMES))	/* 끝 : 원탁이 다시 보이고 그 의자는 생존 비트대로 회색 + ☠ */
 		{
 			m_tView.iExecFrame	= -1;
-			m_iDyingSeat		= -1;
+			m_isFxPlaying		= false;
 			m_isDirty			= true;
 			return;
 		}
@@ -558,6 +876,7 @@ namespace MafiaClient
 
 			break;
 		}
+
 		/* 5초가 지난 뒤 서버에서 판단해서 줌 */
 		case Protocol::PACKET_TYPE::S_TO_C_STARTGAME:
 		{
@@ -574,13 +893,31 @@ namespace MafiaClient
 				break;
 			}
 
+			/* 서버가 섞은 자리 순서대로 다시 앉힘 (키로 찾아 옮김) */
+			{
+				Protocol::ROOM_SEAT arrOld[Protocol::MAX_ROOM_PLAYER]{};
+				memcpy(arrOld, m_tRoomInfo.arrSeats, sizeof(arrOld));
+				for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+				{
+					m_tRoomInfo.arrSeats[i] = {};
+					for (const Protocol::ROOM_SEAT& tOld : arrOld)
+						if (tStart.arrSeatKeys[i] != 0 && tOld.iKey == tStart.arrSeatKeys[i]) m_tRoomInfo.arrSeats[i] = tOld;
+				}
+			}
+
 			/* 게임 시작 : 내 직업 + 첫 단계 */
 			m_eJob = tStart.eJob;
 			m_iAccusedSeat = -1;
 			m_iAliveMask = 0x7F;		/* 시작은 전원 생존 (다음 CHANGEPHASE부터 서버 값) */
+			m_isFindJobUsed = m_isContacted = false;
+			m_tView.strPresident.clear();
+			m_arrKnownJob.fill(Protocol::JOB::UNKNOWN);
+			m_arrKnownMafia.fill(false);
+			m_arrKnownClean.fill(false);
 			Set_State(STATE::GAME);
-			m_tView.vecChats.push_back({ L"", L"게임이 시작되었습니다", false, true });
+			m_tView.vecChats.push_back({ L"", L"게임이 시작되었습니다. 자리가 섞였고 이름은 가려집니다", false, true });
 			m_tView.vecChats.push_back({ L"", std::wstring(L"당신의 직업은 ") + Job_Name(m_eJob) + L" 입니다", false, true });
+			if (*Job_Desc(m_eJob)) m_tView.vecChats.push_back({ L"", Job_Desc(m_eJob), false, true });
 			Apply_RoomInfo();		/* 내 의자 아래에 직업 표시 */
 			Apply_Phase(tStart.ePhase, tStart.iDay, tStart.iRemainMs);
 			Apply_PhaseRule(tStart.ePhase);
@@ -593,7 +930,7 @@ namespace MafiaClient
 			Protocol::S_TO_C_VOTE_RESULT tResult{};
 			memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
 
-			if (tResult.iSeat >= Protocol::MAX_ROOM_PLAYER || m_tView.arrSeats[tResult.iSeat].strName.empty())
+			if (tResult.iSeat < 0 || tResult.iSeat >= Protocol::MAX_ROOM_PLAYER || m_tView.arrSeats[tResult.iSeat].strName.empty())
 			{
 				m_iAccusedSeat = -1;
 				m_tView.vecChats.push_back({ L"", L"투표 결과 지목된 사람이 없습니다", false, true });
@@ -612,17 +949,78 @@ namespace MafiaClient
 			Protocol::S_TO_C_LASTVOTE_RESULT tResult{}; memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
 
 			const std::wstring strCount = L"찬성 " + std::to_wstring(m_iAgree) + L" · 반대 " + std::to_wstring(m_iDisagree);	/* 개수는 중계(GAME_LASTVOTE)로 센 값 */
-			if (tResult.iSeat == Protocol::NONE_SEAT || tResult.iSeat != m_iAccusedSeat)	/* 살아남음 */
+			if (tResult.isPresident && tResult.iSeat == m_iAccusedSeat && tResult.iSeat >= 0 && tResult.iSeat < Protocol::MAX_ROOM_PLAYER)	/* 대통령 : 연행 안 됨 → 확정 */
+			{
+				const std::wstring& strName = m_tView.arrSeats[tResult.iSeat].strName;
+				const std::wstring strHead = (m_ePhase == Protocol::GAME_PHASE::LAST_VOTE) ? strCount + L"  →  " : L"";	/* 투표에서 바로 왔으면 찬반 없음 */
+				m_tView.vecChats.push_back({ L"", strHead + strName + L" 님은 대통령입니다! 투표로 연행할 수 없습니다", false, true });
+				Know_Job(tResult.iSeat, Protocol::JOB::PRESIDENT);		/* 방 전원 공개 */
+				m_isFxPlaying		= true;
+				m_ullDeathStart		= GetTickCount64();
+				m_tView.strExecName	= strName;
+				m_tView.iExecSeat	= tResult.iSeat;
+				m_tView.eNightFx	= ConsoleUI::RoomScreenView::NIGHT_FX::NONE;
+				m_tView.isPardonFx	= true;
+			}
+			else if (tResult.iSeat == Protocol::NONE_SEAT || tResult.iSeat != m_iAccusedSeat)	/* 살아남음 */
 			{
 				m_tView.vecChats.push_back({ L"", strCount + L"  →  연행되지 않았습니다", false, true });
 			}
 			else																		/* 연행 : 머그샷 연출 시작 (실제로 빠지는 건 CHANGEPHASE 생존 비트로) */
 			{
 				m_tView.vecChats.push_back({ L"", strCount + L"  →  " + m_tView.arrSeats[tResult.iSeat].strName + L" 님이 연행되었습니다", false, true });
-				m_iDyingSeat		= tResult.iSeat;
+				m_isFxPlaying		= true;
 				m_ullDeathStart		= GetTickCount64();
 				m_tView.strExecName	= m_tView.arrSeats[tResult.iSeat].strName;
 				m_tView.iExecSeat	= tResult.iSeat;
+				m_tView.eNightFx	= ConsoleUI::RoomScreenView::NIGHT_FX::NONE;
+				m_tView.isPardonFx	= false;
+			}
+			m_isDirty = true;
+			break;
+		}
+		/* 밤 결과 (밤이 끝날 때, 단계 알림보다 먼저) : 총 → 총알 → 살해 / 경호 막기 / 군인 버팀 연출, 아무도 안 노렸으면 조용한 밤 */
+		case Protocol::PACKET_TYPE::S_TO_C_NIGHT_RESULT:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::S_TO_C_NIGHT_RESULT)) break;
+			Protocol::S_TO_C_NIGHT_RESULT tResult{}; memcpy(&tResult, tEvent.Get_Body(), sizeof(tResult));
+			auto Is_Seat = [&](INT32 iSeat) { return iSeat >= 0 && iSeat < Protocol::MAX_ROOM_PLAYER && !m_tView.arrSeats[iSeat].strName.empty(); };
+			using FX = ConsoleUI::RoomScreenView::NIGHT_FX;
+
+			FX eFx = FX::NONE;
+			std::wstring strName;
+			int iTarget = 0;		/* 노린 자리 (연출 속 머리 · 넥타이 색, 막았으면 모름) */
+			if (Is_Seat(tResult.iKilledSeat))
+			{
+				eFx		= FX::KILL;
+				iTarget	= tResult.iKilledSeat;
+				strName	= m_tView.arrSeats[tResult.iKilledSeat].strName;
+				m_tView.vecChats.push_back({ L"", L"간밤에 " + strName + L" 님이 마피아에게 살해당했습니다", false, true });
+			}
+			else if (tResult.isBlocked)
+			{
+				eFx = FX::BLOCK;
+				m_tView.vecChats.push_back({ L"", L"💂 경호원이 마피아의 공격을 막아냈습니다", false, true });
+			}
+			else if (tResult.isSoldierSurvived && Is_Seat(tResult.iSoldierSeat))
+			{
+				eFx		= FX::SOLDIER;
+				iTarget	= tResult.iSoldierSeat;
+				strName	= m_tView.arrSeats[tResult.iSoldierSeat].strName;
+				m_tView.vecChats.push_back({ L"", L"🔫 " + strName + L" 님은 군인이었습니다! 마피아의 공격을 버텨냈습니다", false, true });
+				Know_Job(tResult.iSoldierSeat, Protocol::JOB::SOLDIER);		/* 방 전원 공개 */
+			}
+			else
+				m_tView.vecChats.push_back({ L"", L"조용한 밤이었습니다", false, true });
+
+			if (eFx != FX::NONE)		/* 연출 시작 (실제로 빠지는 건 CHANGEPHASE 생존 비트로) */
+			{
+				m_isFxPlaying		= true;
+				m_ullDeathStart		= GetTickCount64();
+				m_tView.eNightFx	= eFx;
+				m_tView.isPardonFx	= false;
+				m_tView.strExecName	= strName;
+				m_tView.iExecSeat	= iTarget;
 			}
 			m_isDirty = true;
 			break;
@@ -638,12 +1036,18 @@ namespace MafiaClient
 			for (int i = 0; i < static_cast<int>(m_tView.arrSeats.size()); ++i)
 			{
 				if (m_tView.arrSeats[i].strName.empty()) continue;
-				m_tView.vecResult.push_back({ m_tView.arrSeats[i].strName, tEnd.arrJobs[i] == Protocol::JOB::MAFIA, ((tEnd.iAliveMask >> i) & 1) == 0, i == m_iMySeat });
+				wchar_t wszNick[Protocol::MAX_NICNAME_BUF]{};
+				wcsncpy_s(wszNick, m_tRoomInfo.arrSeats[i].wszNickname, _TRUNCATE);
+				m_tView.vecResult.push_back({ std::to_wstring(i + 1) + L"번 " + wszNick, Job_Role(tEnd.arrJobs[i]), Is_RedJob(tEnd.arrJobs[i]), ((tEnd.iAliveMask >> i) & 1) == 0, i == m_iMySeat });
 			}
 			m_tView.vecChats.push_back({ L"", m_tView.isMafiaWin ? L"마피아가 승리했습니다" : L"시민이 승리했습니다", false, true });
 
 			/* 게임 값 정리 (연출이 원탁을 덮고 있어서 바로 지워도 안 보임) */
 			m_eJob			= Protocol::JOB::UNKNOWN;
+			m_tView.strPresident.clear();
+			m_arrKnownJob.fill(Protocol::JOB::UNKNOWN);
+			m_arrKnownMafia.fill(false);
+			m_arrKnownClean.fill(false);
 			m_iAliveMask	= 0x7F;
 			m_iAccusedSeat	= -1;
 			m_ullWinStart	= 0;				/* 연행 연출이 끝난 뒤 Update_Result가 시작 */
@@ -654,8 +1058,19 @@ namespace MafiaClient
 		case Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA:
 		{
 			const Protocol::PROVIDE_DATA* pData = reinterpret_cast<const Protocol::PROVIDE_DATA*>(tEvent.Get_Body());
-			if (pData == nullptr) break;
-			
+			if (pData == nullptr || tEvent.Get_BodyLen() < sizeof(Protocol::PROVIDE_DATA)) break;	/* 종류(eDataType)를 읽기 전에 길이부터 */
+
+			switch (pData->eDataType)
+			{
+			case Protocol::DATA_TYPE::SNOOP_RESULT:
+			case Protocol::DATA_TYPE::MEDIUM_RESULT:
+			case Protocol::DATA_TYPE::BETRAYER_RESULT:
+			case Protocol::DATA_TYPE::PRESIDENT_NOTICE:
+				On_JobData(tEvent, pData->eDataType);
+				break;
+			default: break;
+			}
+
 			if (pData->eDataType == Protocol::DATA_TYPE::CHAT_LOG)
 			{
 				if (tEvent.Get_BodyLen() != sizeof(Protocol::CHAT_LOG)) break;		/* 크기 안 맞으면 버림 (짧은 패킷이면 memcpy가 범위 밖을 읽음) */

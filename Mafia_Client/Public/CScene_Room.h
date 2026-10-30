@@ -44,6 +44,17 @@ namespace MafiaClient
 		void	Key_Vote(const KEY_EVENT_RECORD& tKey);			/* VOTE : 1 ~ 7 */
 		void	Key_LastVote(const KEY_EVENT_RECORD& tKey);		/* LAST_VOTE : Y / N */
 		std::vector<int> Vote_Candidates() const;				/* 투표 후보 : 살아 있는 사람 중 나 빼고 (시계 방향) + 마지막에 무효표 */
+		bool	Key_Pick(const KEY_EVENT_RECORD& tKey, const std::vector<int>& vecCand);	/* 막대 고르기 공용 (←→ · 숫자) : Enter로 확정하면 true */
+
+		/* 밤 능력 : 고르기 · 보내기만 (판정은 서버). [Tab] 으로 모드 바꿈 (마피아 : 처치 ↔ 채팅) */
+		enum class NIGHT_MODE { KILL, SNOOP, GUARD, MEDIUM, FIND_JOB, CONTACT, NOTICE, CHAT };
+		std::vector<NIGHT_MODE> Night_Modes() const;			/* 지금 쓸 수 있는 모드 (직업 · 이번 밤 사용 여부) */
+		std::vector<int>		Night_Candidates() const;		/* 지금 모드로 고를 수 있는 자리 */
+		void	Key_Night(const KEY_EVENT_RECORD& tKey);
+		void	Apply_NightMode(NIGHT_MODE eMode);				/* 막대 / 입력 줄 / 안내 바꾸기 */
+		void	Send_Skill();									/* 고른 자리로 C_TO_S_JOB_ACTION */
+		void	On_JobData(const Net::Event& tEvent, Protocol::DATA_TYPE eType);	/* 능력 결과 · 대통령 공지 */
+		void	Know_Job(int iSeat, Protocol::JOB eJob);		/* 알아낸 직업 → 의자 위 */
 		bool	Is_Alive(int iSeat) const { return iSeat >= 0 && (m_iAliveMask >> iSeat) & 1; }
 
 		/* 상태별 업데이트 */
@@ -89,9 +100,18 @@ namespace MafiaClient
 		int							m_iDisagree{ 0 };
 		bool						m_isLastVoteDone{ false };	/* 찬반은 한 번만 */
 
+		/* 밤 능력 (서버도 같은 규칙으로 막음 : 여기선 화면 · 입력만) */
+		NIGHT_MODE					m_eNightMode{ NIGHT_MODE::CHAT };
+		bool						m_isSkillDone{ false };		/* 이번 밤 능력 씀 (밤마다 초기화) */
+		bool						m_isFindJobUsed{ false };	/* 배신자 직업 확인 (게임 중 1회) */
+		bool						m_isContacted{ false };		/* 배신자 ↔ 마피아 접선 (게임 내내) */
+		std::array<Protocol::JOB, Protocol::MAX_ROOM_PLAYER>	m_arrKnownJob{};	/* 능력으로 알아낸 남의 직업 (UNKNOWN = 모름) */
+		std::array<bool, Protocol::MAX_ROOM_PLAYER>			m_arrKnownMafia{};	/* 탐정 결과 "마피아" (직업은 모름) */
+		std::array<bool, Protocol::MAX_ROOM_PLAYER>			m_arrKnownClean{};	/* 탐정 결과 "마피아 아님" */
+
 		/* 처형 연출 : 결과를 받은 순간부터 원탁을 덮는 해골 상자 (프레임은 m_tView.iExecFrame) */
 		static constexpr ULONGLONG	DEATH_FRAME_MS{ 150 };
-		int							m_iDyingSeat{ -1 };		/* 연출 중인 자리 (-1 = 아님) */
+		bool						m_isFxPlaying{ false };	/* 연행 · 밤 습격 연출 중 */
 		ULONGLONG					m_ullDeathStart{ 0 };
 		ULONGLONG					m_ullWinStart{ 0 };		/* 승리 연출 시작 시각 (0 = 아직 : 연행 연출이 먼저 끝나야 함) */
 	};

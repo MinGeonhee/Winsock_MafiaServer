@@ -9,6 +9,21 @@
 
 namespace MafiaServer
 {
+	/* C_TO_S_JOB_ACTION : 직업별 구조체 크기 (모르는 직업 = 0) */
+	static size_t JobAction_Size(Protocol::JOB eJob)
+	{
+		switch (eJob)
+		{
+		case Protocol::JOB::MAFIA:		return sizeof(Protocol::MAFIA_ACTION);
+		case Protocol::JOB::SNOOP:		return sizeof(Protocol::SNOOP_ACTION);
+		case Protocol::JOB::BODYGUARD:	return sizeof(Protocol::BODYGUARD_ACTION);
+		case Protocol::JOB::MEDIUM:		return sizeof(Protocol::MEDIUM_ACTION);
+		case Protocol::JOB::BETRAYER:	return sizeof(Protocol::BETRAYER_ACTION);
+		case Protocol::JOB::PRESIDENT:	return sizeof(Protocol::PRESIDENT_ACTION);
+		default:						return 0;
+		}
+	}
+
 	CServerApp::CServerApp()
 		: m_pMainServer{nullptr} , m_isDirty{false} , m_pPlayerManager{ nullptr }, m_pRoomManager{ nullptr }
 	{
@@ -284,6 +299,18 @@ namespace MafiaServer
 			m_pRoomManager->LastVote(pBody->iRoomKey, tEvent.iKey, pBody->isAgree);
 			break;
 #pragma endregion
+		}
+		case Protocol::PACKET_TYPE::C_TO_S_JOB_ACTION:
+		{
+			/* 머리부터 : 직업별 구조체 크기는 eJob을 보고 한 번 더 확인 */
+			if (tEvent.Get_BodyLen() < sizeof(Protocol::JOB_ACTION)) break;
+			const Protocol::JOB_ACTION* pBody{ reinterpret_cast<const Protocol::JOB_ACTION*>(tEvent.Get_Body())};
+			if (pBody == nullptr) break;
+
+			if (tEvent.Get_BodyLen() != JobAction_Size(pBody->eJob)) break;	/* 모르는 직업이면 0 → 버림 */
+
+			m_pRoomManager->Use_Skill(tEvent.iKey, *pBody);
+			break;
 		}
 		case Protocol::PACKET_TYPE::END:			break;
 		default:									break;
