@@ -11,7 +11,7 @@ namespace MafiaClient
 		switch (ePhase)
 		{
 		case Protocol::GAME_PHASE::NIGHT:           return L"밤이 되었습니다";
-		case Protocol::GAME_PHASE::LOADING_DAY:     return L"아침이 밝아옵니다";
+		case Protocol::GAME_PHASE::LOADING_DAY:     return L"해가 뜨고 있습니다";
 		case Protocol::GAME_PHASE::DAY:             return L"토론 시간입니다";
 		case Protocol::GAME_PHASE::VOTE:            return L"투표를 시작합니다";
 		case Protocol::GAME_PHASE::ALLOCUTION:      return L"최후의 변론 시간입니다";

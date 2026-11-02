@@ -110,6 +110,17 @@ namespace ConsoleUI
 	/* ---------------- 글자 폭 (한글·이모지 = 2칸) ---------------- */
 	inline int Char_Width(char32_t c)
 	{
+		if (c == 0xFE0F) return 0;	/* 이모지 표시 선택자 : 칸을 차지하지 않고 앞 글자를 2칸으로 만듦 */
+		/* U+1F300 아래에 있지만 터미널에서 2칸인 이모지 (유니코드 Emoji_Presentation) */
+		static constexpr char32_t EMOJI[][2] = {
+			{ 0x231A, 0x231B }, { 0x23E9, 0x23EC }, { 0x23F0, 0x23F0 }, { 0x23F3, 0x23F3 }, { 0x25FD, 0x25FE }, { 0x2614, 0x2615 },
+			{ 0x2648, 0x2653 }, { 0x267F, 0x267F }, { 0x2693, 0x2693 }, { 0x26A1, 0x26A1 }, { 0x26AA, 0x26AB }, { 0x26BD, 0x26BE },
+			{ 0x26C4, 0x26C5 }, { 0x26CE, 0x26CE }, { 0x26D4, 0x26D4 }, { 0x26EA, 0x26EA }, { 0x26F2, 0x26F3 }, { 0x26F5, 0x26F5 },
+			{ 0x26FA, 0x26FA }, { 0x26FD, 0x26FD }, { 0x2705, 0x2705 }, { 0x270A, 0x270B }, { 0x2728, 0x2728 }, { 0x274C, 0x274C },
+			{ 0x274E, 0x274E }, { 0x2753, 0x2755 }, { 0x2757, 0x2757 }, { 0x2795, 0x2797 }, { 0x27B0, 0x27B0 }, { 0x27BF, 0x27BF },
+			{ 0x2B1B, 0x2B1C }, { 0x2B50, 0x2B50 }, { 0x2B55, 0x2B55 } };
+		for (const auto& tRange : EMOJI)
+			if (c >= tRange[0] && c <= tRange[1]) return 2;
 		if ((c >= 0x1100 && c <= 0x115F) || (c >= 0x2E80 && c <= 0xA4CF) || (c >= 0xAC00 && c <= 0xD7A3) ||
 			(c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFE30 && c <= 0xFE4F) || (c >= 0xFF00 && c <= 0xFF60) ||
 			(c >= 0xFFE0 && c <= 0xFFE6) || (c >= 0x1F300 && c <= 0x1FAFF))
@@ -836,6 +847,7 @@ namespace ConsoleUI
 		bool			isMe{ false };		// 파란색
 		bool			isMaster{ false };	// ★
 		bool			isDead{ false };	// 회색 (게임 중)
+		bool			isArrested{ false };	// 죽은 이유가 연행 (아이콘, 글자가 사망과 다름)
 		std::wstring	strRole;			// 의자 위 (직업 "🔪 마피아" 등, 비면 없음)
 		bool			isRoleRed{ false };	// 직업 색 : 빨강(마피아) / 초록(그 외)
 		int				iVotes{ -1 };		// 의자 아래 "투표 : N 표" (-1 = 안 보임)
@@ -852,6 +864,7 @@ namespace ConsoleUI
 		bool			isSystem{ false };	// "── 민수 님이 들어왔습니다 ──" 같은 회색 알림 줄
 		int				iSeat{ -1 };		// 보낸 사람 자리 (자리 색, -1 = 모름)
 		std::wstring	strIcon;			// 보낸 사람의 아는 직업 아이콘
+		bool			isDeadChat{ false };	// 죽은 사람 채팅 : 이름과 글자 모두 회색
 	};
 
 	struct RoomScreenView
@@ -896,7 +909,7 @@ namespace ConsoleUI
 		int						iSkillTab{ 0 };			// 배신자 탭 : 0 없음 / 1 직업 탐색 / 2 접선
 		bool					isFindUsed{ false };	// 배신자 : 직업 탐색 소진
 		std::wstring			strSkillStatus;			// 배신자 : "접선 완료 : 4번" (비면 없음)
-		std::wstring			strTableWait;			// 넘어가는 단계 : 시계 대신 탁자에 띄울 글 ("아침 기다리는 중", 비면 시계)
+		std::wstring			strTableWait;			// 넘어가는 단계 : 시계 대신 탁자에 띄울 글 ("해가 뜨고 있습니다", 비면 시계)
 		int						iSpotSeat{ -1 };		// 최후 변론 : 조명 받는 자리 (-1 = 원탁)
 		std::wstring			strDoneLabel;			// 막대 확정 문구 (비면 "처치 완료"처럼, 접선 : "접선 성공" / "접선 실패")
 		bool					isDoneFail{ false };	// 막대를 붉게 (접선 실패)
@@ -914,7 +927,7 @@ namespace ConsoleUI
 		bool					isPardonFx{ false };	// 찬반에서 대통령이라 연행 안 됨 : 머그샷 대신 연단 연출
 
 		/* 게임 끝 : 승리 연출(WIN_FRAMES) → 결과 창 (iWinFrame >= WIN_FRAMES 이면 결과 창 고정) */
-		struct ResultRow { std::wstring strName; std::wstring strRole; bool isMafia{ false }; bool isDead{ false }; bool isMe{ false }; };
+		struct ResultRow { std::wstring strName; std::wstring strRole; bool isMafia{ false }; bool isDead{ false }; bool isMe{ false }; bool isArrested{ false }; };
 		static constexpr int	WIN_FRAMES{ 20 };
 		int						iWinFrame{ -1 };		// -1 = 아님
 		bool					isMafiaWin{ false };
@@ -957,6 +970,11 @@ namespace ConsoleUI
 			{
 				for (wchar_t ch : str)
 				{
+					if (ch == 0xFE0F)		/* 칸 없이 앞 글자에 붙음 */
+					{
+						if (iRow >= 0 && iRow < m_iH && iCol > 0 && iCol <= m_iW) At(iRow, iCol - 1).isEmoji = true;
+						continue;
+					}
 					const int iW = Char_Width(ch);
 					if (iRow >= 0 && iRow < m_iH && iCol >= 0 && iCol + iW <= m_iW)
 					{
@@ -977,12 +995,13 @@ namespace ConsoleUI
 					if (tCell.isCont) continue;
 					if (tCell.szColor != szCur) { str += Color::Reset; if (tCell.szColor) str += tCell.szColor; szCur = tCell.szColor; }
 					str += tCell.ch;
+					if (tCell.isEmoji) str += L'\xFE0F';
 				}
 				return str + Color::Reset;
 			}
 
 		private:
-			struct Cell { wchar_t ch{ L' ' }; const wchar_t* szColor{ nullptr }; bool isCont{ false }; };	// isCont : 한글 오른쪽 반 칸
+			struct Cell { wchar_t ch{ L' ' }; const wchar_t* szColor{ nullptr }; bool isCont{ false }; bool isEmoji{ false }; };	// isCont : 한글 오른쪽 반 칸 / isEmoji : 뒤에 U+FE0F를 붙임
 			Cell& At(int iRow, int iCol) { return m_vecCells[static_cast<size_t>(iRow * m_iW + iCol)]; }
 
 			int					m_iW, m_iH;
@@ -1261,7 +1280,7 @@ namespace ConsoleUI
 					Put(r, iCol, !tRow.strRole.empty() ? tRow.strRole : (tRow.isMafia ? L"🔪 마피아" : L"👤 시민"), isWinner ? (tRow.isMafia ? RED : GREEN) : GRAY);
 					Put(r, iCol + 12, Fit(tRow.strName, 12), szRow);
 					if (tRow.isMe)   Put(r, iCol + 25, L"(나)", L"\x1b[1;94m");
-					if (tRow.isDead) Put(r, iCol + 30, L"사망", GRAY);
+					if (tRow.isDead) Put(r, iCol + 30, tRow.isArrested ? L"연행" : L"사망", GRAY);
 					r += 1;
 				}
 				Center(iBoxH - 3, L"[Enter] 대기실로 돌아가기", GRAY);
@@ -1761,14 +1780,14 @@ namespace ConsoleUI
 				{
 					std::wstring strBand = Fit(strLine, iTagCol);
 					strBand += Fit(tSeat.strRole, iStateCol - iTagCol);
-					strBand += Fit(tSeat.isDead ? L"☠ 사망" : (tSeat.iVotes > 0 ? std::to_wstring(tSeat.iVotes) + L" 표" : L""), BAND_W - iStateCol);
+					strBand += Fit(tSeat.isDead ? (tSeat.isArrested ? L"🚔 연행" : L"☠ 사망") : (tSeat.iVotes > 0 ? std::to_wstring(tSeat.iVotes) + L" 표" : L""), BAND_W - iStateCol);
 					Put(r, BAND_L, strBand, BAND[std::clamp(tView.iPickColor, 0, 2)]);
 					continue;
 				}
 				const wchar_t* szText = isEmpty || tSeat.isDead ? GRAY : (tSeat.isMe ? WHITE : (tView.isVoting && !isAble ? GRAY : Seat_Color(i)));
 				Put(r, BAND_L, isEmpty ? L"    " + std::to_wstring(i + 1) + L"번   빈자리" : strLine, szText);
 				if (!tSeat.strRole.empty()) Put(r, BAND_L + iTagCol, tSeat.strRole, tSeat.isDead ? GRAY : (tSeat.isRoleRed ? L"\x1b[1;91m" : L"\x1b[1;92m"));
-				if (tSeat.isDead) Put(r, BAND_L + iStateCol, L"☠ 사망", GRAY);
+				if (tSeat.isDead) Put(r, BAND_L + iStateCol, tSeat.isArrested ? L"🚔 연행" : L"☠ 사망", GRAY);
 				else if (tSeat.iVotes > 0) Put(r, BAND_L + iStateCol, std::to_wstring(tSeat.iVotes) + L" 표", L"\x1b[1;93m");	// 받은 표 수
 			}
 
@@ -1990,8 +2009,8 @@ namespace ConsoleUI
 			{
 			case SCENE::MAFIA:		tStyle = { L"\x1b[1;38;2;232;72;85m",	L"\x1b[1;97;48;2;179;22;31m",	L"처치 대상",	{ L"밤마다 한 명 처치", L"경호원이 지키면 실패" } }; break;
 			case SCENE::BETRAYER:	tStyle = { L"\x1b[1;38;2;232;154;74m",	L"\x1b[1;97;48;2;154;90;18m",	tView.iSkillTab == 1 ? L"탐색할 사람" : L"접선할 사람",	{ L"하루에 하나만 사용", L"탐색은 게임당 1회" } }; break;
-			case SCENE::MEDIUM:		tStyle = { L"\x1b[1;38;2;181;140;240m",	L"\x1b[1;97;48;2;90;45;140m",	L"부를 영혼",	{ L"죽은 사람 직업 확인", L"결과는 나에게만 보임" } }; break;
-			case SCENE::SNOOP:		tStyle = { L"\x1b[1;38;2;90;169;240m",	L"\x1b[1;97;48;2;31;111;181m",	L"조사 대상",	{ L"둘째 밤부터 한 명 조사", L"배신자는 마피아 아님" } }; break;
+			case SCENE::MEDIUM:		tStyle = { L"\x1b[1;38;2;181;140;240m",	L"\x1b[1;97;48;2;90;45;140m",	L"부를 영혼",	{ L"사망자 직업 확인", L"연행자는 볼 수 없음" } }; break;
+			case SCENE::SNOOP:		tStyle = { L"\x1b[1;38;2;90;169;240m",	L"\x1b[1;97;48;2;31;111;181m",	tView.iSkillTab == 2 ? L"조사할 연행자" : L"조사 대상",	{ L"마피아 또는 연행자 조사", L"밤마다 하나만 사용" } }; break;
 			case SCENE::PRESIDENT:	tStyle = { L"\x1b[1;38;2;232;195;74m",	L"\x1b[1;97;48;2;138;106;18m",	L"공지 작성",	{ L"왼쪽 위 띠로 전원에게", L"보입니다" } }; break;
 			case SCENE::BODYGUARD:	tStyle = { L"\x1b[1;38;2;63;195;90m",	L"\x1b[1;97;48;2;18;156;44m",	L"지킬 사람",	{ L"밤마다 한 명 지키기", L"자기 자신도 가능" } }; break;
 			default: return;
@@ -2046,6 +2065,11 @@ namespace ConsoleUI
 					Put(3, COL, tView.isFindUsed ? L" 탐색 끝 " : L" 탐색 1회 ", isFind ? L"\x1b[1;30;48;2;232;154;74m" : GRAY);
 					if (tView.strSkillStatus.empty()) Put(3, COL + 11, L" 접선 ", isCon ? L"\x1b[1;30;48;2;232;154;74m" : GRAY);
 				}
+				if (tView.eNightScene == SCENE::SNOOP && tView.iSkillTab > 0)
+				{
+					Put(3, COL, L" 마피아 ", tView.iSkillTab == 1 ? L"\x1b[1;30;48;2;90;169;240m" : GRAY);
+					Put(3, COL + 9, L" 연행자 ", tView.iSkillTab == 2 ? L"\x1b[1;30;48;2;90;169;240m" : GRAY);
+				}
 				for (int i = 0; i < 7; ++i)
 				{
 					const SeatView& tSeat = tView.arrSeats[i];
@@ -2055,7 +2079,7 @@ namespace ConsoleUI
 					const bool isEmpty = tSeat.strName.empty();
 					std::wstring strLine = (isPick ? (tView.isVoteDone ? L"* " : L"▶ ") : L"  ") + std::to_wstring(i + 1) + L"번";
 					if (tSeat.isMe) strLine += L" (나)";
-					const std::wstring strTag = !tSeat.strRole.empty() ? tSeat.strRole : (tSeat.isDead ? L"사망" : L"");
+					const std::wstring strTag = !tSeat.strRole.empty() ? tSeat.strRole : (tSeat.isDead ? (tSeat.isArrested ? L"연행" : L"사망") : L"");
 					if (isPick) { Put(r, BAND_L, Fit(L" " + strLine, TAG) + Fit(strTag, BAND_W - TAG), tStyle.szBand); continue; }
 
 					const wchar_t* szText = (isEmpty || (tSeat.isDead && !isAble) || (tView.isVoting && !isAble && !tSeat.isMe)) ? GRAY : (tSeat.isMe ? WHITE : Seat_Color(i));
@@ -2352,7 +2376,7 @@ namespace ConsoleUI
 			if (tSeat.isMaster) strLabel = L"★ " + strLabel;
 			if (tSeat.isMe) strLabel += L"(나)";
 			if (!tSeat.strIcon.empty()) strLabel += L" " + tSeat.strIcon;		/* 내 직업 · 알아낸 직업 */
-			if (tSeat.isDead) strLabel += L" ☠ ";
+			if (tSeat.isDead) strLabel += tSeat.isArrested ? L" 🚔" : L" ☠ ";
 			if (tSeat.iVotes > 0) strLabel += L" " + std::to_wstring(tSeat.iVotes) + L"표";
 
 			const bool isPick = tView.isVoting && tView.iVoteSel == i;
@@ -2412,11 +2436,17 @@ namespace ConsoleUI
 			}
 			else
 			{
+				static const std::wstring DEAD = L"\x1b[38;2;156;156;156;48;2;38;38;47m";	/* 죽은 사람 채팅 : 회색 글자 + 어두운 배경 띠 */
 				const std::wstring strName = iter->strName + iter->strIcon;
 				const int iIndent = Width(strName) + 2;
 				const std::vector<std::wstring> vecParts = Detail::Wrap(iter->strText, TEXT_W - iIndent, TEXT_W - iIndent);
 				for (size_t i = 0; i < vecParts.size(); ++i)
 				{
+					if (iter->isDeadChat)
+					{
+						vecMsg.push_back(DEAD + ((i == 0) ? strName + L"  " : Spaces(iIndent)) + Fit(vecParts[i], TEXT_W - iIndent) + Reset);
+						continue;
+					}
 					const std::wstring strHead = (i == 0) ? std::wstring(iter->iSeat >= 0 ? Detail::Seat_Color(iter->iSeat) : (iter->isMe ? ME : Yellow)) + strName + Reset + L"  " : Spaces(iIndent);
 					vecMsg.push_back(strHead + Fit(vecParts[i], TEXT_W - iIndent));
 				}

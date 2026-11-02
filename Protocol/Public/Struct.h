@@ -54,7 +54,8 @@ namespace Protocol
 		Protocol::GAME_PHASE	eCurPhase{Protocol::GAME_PHASE::END};	/* 현재 Phase */
 		uint16_t				iDay{0};								/* 몇일째 인지 */
 		uint64_t				iRemainMs{ 0 };							/* 현재 Phase 제한시간 */
-		uint8_t					iAliveMask{ 0 };						/* 비트 i = i번 자리 생존 (화면용 : 죽은 의자 회색 · 투표 후보) */
+		uint8_t					iAliveMask{ 0 };						/* 비트 i = i번 자리 생존 (화면용 : 죽은 의자 회색, 투표 후보) */
+		uint8_t					iArrestMask{ 0 };						/* 비트 i = i번 자리 연행됨 (죽은 사람 중 투표로 연행된 사람) */
 	};
 	
 	/* ---------------- 직업 능력 (C_TO_S_JOB_ACTION) ----------------
@@ -85,9 +86,10 @@ namespace Protocol
 		TARGET		tTarget{};
 	};
 
-	struct SNOOP_ACTION : JOB_ACTION			/* 밤 : 마피아인지 조사할 사람 */
+	struct SNOOP_ACTION : JOB_ACTION			/* 밤 : 마피아인지 조사할 사람 또는 직업을 조사할 연행자 */
 	{
 		TARGET		tTarget{};
+		bool		isArrested{ false };		/* false = 마피아 조사 / true = 연행자 직업 조사 */
 	};
 
 	struct BODYGUARD_ACTION : JOB_ACTION		/* 밤 : 지킬 사람 */
@@ -95,7 +97,7 @@ namespace Protocol
 		TARGET		tTarget{};
 	};
 
-	struct MEDIUM_ACTION : JOB_ACTION			/* 밤 : 직업을 볼 죽은 사람 */
+	struct MEDIUM_ACTION : JOB_ACTION			/* 밤 : 직업을 볼 사망자 */
 	{
 		TARGET		tTarget{};
 	};
@@ -161,6 +163,7 @@ namespace Protocol
 		ENDGAME_RESULT  eWinner{ ENDGAME_RESULT::NONE };
 		JOB             arrJobs[MAX_ROOM_PLAYER]{};     /* 자리별 직업 공개 (빈자리 = UNKNOWN) */
 		uint8_t         iAliveMask{ 0 };                /* 마지막 생존 상태 (결과 창에 ☠ 표시용) */
+		uint8_t         iArrestMask{ 0 };               /* 연행된 자리 (결과 창에 연행 표시용) */
 	};
 
 	/* 방 자리 바뀜 : 방장 + 자리 7칸 (빈자리는 iKey 0) */
@@ -270,6 +273,8 @@ namespace Protocol
 	{
 		TARGET		tTarget{};
 		bool		isMafia{ false };
+		bool		isArrested{ false };		/* 연행자 조사였는지 */
+		JOB			eJob{ JOB::UNKNOWN };		/* 연행자 조사 : 대상 직업 */
 	};
 
 	struct MEDIUM_RESULT : PROVIDE_DATA
@@ -298,6 +303,7 @@ namespace Protocol
 		SYSTEMTIME	tTime{};					/* 시간 */
 		wchar_t		wszName[MAX_NICNAME_BUF];	/* 보낸 사람 닉네임 */
 		wchar_t		wszText[MAX_CHAT_BUF]{};	/* 채팅 내용 */
+		bool		isDeadChat{ false };		/* 죽은 사람 채팅 (죽은 사람에게만 전송) */
 	};
 
 #pragma pack(pop)

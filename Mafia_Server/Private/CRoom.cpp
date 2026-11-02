@@ -187,8 +187,9 @@ namespace MafiaServer
 
 		/* 게임 중 : 단계 규칙상 못 치는 사람의 채팅은 버림 (클라도 막지만 서버가 최종 판단) */
 		const bool isGame = (m_eCurState == CRoom::STATE::GAME && m_pLogic);
-		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return L"지금 단계엔 채팅 불가 (밤 · 투표 · 사망 등)";
-		const bool isMafiaOnly = isGame && m_pLogic->Get_Phase() == Protocol::GAME_PHASE::NIGHT;	/* 밤 채팅은 마피아만 받음 */
+		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return L"지금 단계엔 채팅 불가 (밤, 투표 등)";
+		const bool isDeadChat  = isGame && m_pLogic->Is_Dead(Find_Seat(iChatterKey));				/* 죽은 사람 채팅은 죽은 사람만 받음 */
+		const bool isMafiaOnly = isGame && !isDeadChat && m_pLogic->Get_Phase() == Protocol::GAME_PHASE::NIGHT;	/* 밤 채팅은 마피아만 받음 */
 
 		m_pChatting->Chatting(tTime,iChatterKey,wstrText);
 		/* 추후 채팅을 실패했을 경우에 실패 메세지 따로 첨부 */
@@ -201,6 +202,7 @@ namespace MafiaServer
 		const std::wstring strName = isGame ? std::to_wstring(Find_Seat(iChatterKey) + 1) + L"번" : pPlayer->Get_Nickname();	/* 게임 중엔 이름 대신 자리 번호 */
 		wcsncpy_s(tChat.wszName, strName.c_str(), _TRUNCATE);
 		wcsncpy_s(tChat.wszText, wstrText.c_str(), _TRUNCATE);
+		tChat.isDeadChat = isDeadChat;
 
 		/* 발송 */
 		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
@@ -208,6 +210,7 @@ namespace MafiaServer
 			const Net::ClientKey Key = m_arrayPlayerClientKeys[i];
 			if (Key == Net::NONE_CLIENTKEY) continue;
 			if (isMafiaOnly && !m_pLogic->Is_NightChatMember(i)) continue;
+			if (isDeadChat && !m_pLogic->Is_Dead(i)) continue;
 			pMainServer->Send_Packet(Key, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tChat);
 		}
 		return nullptr;
@@ -331,6 +334,7 @@ namespace MafiaServer
 		Protocol::S_TO_C_GAME_END tBody{};
 		tBody.eWinner		= m_pLogic->Get_Winner();
 		tBody.iAliveMask	= m_pLogic->Get_AliveMask();
+		tBody.iArrestMask	= m_pLogic->Get_ArrestMask();
 		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
 		{
 			if (m_arrayPlayerClientKeys[i] == Net::NONE_CLIENTKEY) continue;
@@ -380,6 +384,7 @@ namespace MafiaServer
 		tBody.iDay		= m_pLogic->Get_Day();
 		tBody.iRemainMs	= m_pLogic->Get_Remain(uillNow);
 		tBody.iAliveMask = m_pLogic->Get_AliveMask();
+		tBody.iArrestMask = m_pLogic->Get_ArrestMask();
 
 		for (auto Key : m_arrayPlayerClientKeys)
 		{
