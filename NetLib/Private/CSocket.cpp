@@ -1,12 +1,12 @@
-#include "pch.h"
+Ôªø#include "pch.h"
 #include "Net_Header.h"
 
 namespace Net
 {
 
 	CSocket::CSocket()
-		: m_eType{ TYPE::TYPE_END }, m_pSocket{ INVALID_SOCKET }, m_iLastError{ 0 },
-		m_eReady{ READY::NONE } , m_eProtocalType{PROTOCAL_TYPE::PROTOCAL_TYPE_END}
+		: m_eType{ TYPE::END }, m_pSocket{ INVALID_SOCKET }, m_iLastError{ 0 },
+		m_eReady{ READY::NONE } , m_eProtocalType{PROTOCAL_TYPE::END }
 	{
 	}
 
@@ -18,15 +18,16 @@ namespace Net
 	HRESULT CSocket::Initialize(TYPE eType, PROTOCAL_TYPE eProtocalType, NET_PROTOCOL_TYPE eNetProtocalType)
 	{
 
-		if (eType < 0 || eType >= TYPE::TYPE_END) return E_FAIL;
-		if (eProtocalType < 0 || eProtocalType >= PROTOCAL_TYPE::PROTOCAL_TYPE_END) return E_FAIL;
-		if (eNetProtocalType < 0 || eNetProtocalType >= NET_PROTOCOL_TYPE::NET_PROTOCOL_TYPE_END) return E_FAIL;
+		if (static_cast<INT32>(eType) < 0 || eType >= TYPE::END) return E_FAIL;
+		if (static_cast<INT32>(eType) < 0 || eProtocalType >= PROTOCAL_TYPE::END) return E_FAIL;
+		if (static_cast<INT32>(eType) < 0 || eNetProtocalType >= NET_PROTOCOL_TYPE::END) return E_FAIL;
 
 		m_eType = eType;
 		m_eProtocalType = eProtocalType;
 
-		/* TCP / UDP «¡∑Œ≈‰ƒ› ≈∏¿‘ø° ∏¬∞‘ socket ª˝º∫ */
-		m_pSocket = socket(eNetProtocalType == NET_PROTOCOL_TYPE::IPv4 ? AF_INET : AF_INET6, m_eProtocalType == PROTOCAL_TYPE::TPC ? SOCK_STREAM : SOCK_DGRAM, m_eProtocalType);
+		/* TCP / UDP ÌîÑÎ°úÌÜ†ÏΩú ÌÉÄÏûÖÏóê ÎßûÍ≤å socket ÏÉùÏÑ± */
+		m_pSocket = socket(eNetProtocalType == NET_PROTOCOL_TYPE::IPv4 ? AF_INET : AF_INET6, 
+			m_eProtocalType == PROTOCAL_TYPE::TCP ? SOCK_STREAM : SOCK_DGRAM, static_cast<int>(m_eProtocalType));
 		if (m_pSocket == INVALID_SOCKET)
 		{
 			m_iLastError = WSAGetLastError();
@@ -37,17 +38,17 @@ namespace Net
 	}
 
 
-#pragma region  Server Type ¿¸øÎ «‘ºˆ
+#pragma region  Server Type Ï†ÑÏö© Ìï®Ïàò
 
 	bool CSocket::Bind(const CAddress* pAddress)
 	{
-		/* º¯º≠∞° Bind¿ÃªÛ¿Ã∂Û∏È */
+		/* ÏàúÏÑúÍ∞Ä BindÏù¥ÏÉÅÏù¥ÎùºÎ©¥ */
 		if (m_eType != TYPE::SERVER)	return false;
 		if (m_eReady >= READY::BIND)	return false;
 		if (pAddress == nullptr)		return false;
 
 
-		/* ≥™¡ﬂø° πﬁæ∆ø√ ¡÷º“∞™  CAddress ±∏«ˆ»ƒ ¥ŸΩ√ø¿¿⁄ */
+		/* ÎÇòÏ§ëÏóê Î∞õÏïÑÏò¨ Ï£ºÏÜåÍ∞í  CAddress Íµ¨ÌòÑÌõÑ Îã§ÏãúÏò§Ïûê */
 		if (bind(m_pSocket, pAddress->Get_Addr(), pAddress->Get_Size()))
 		{
 			m_iLastError = WSAGetLastError();
@@ -112,37 +113,52 @@ namespace Net
 
 #pragma endregion
 
-#pragma region Client Type ¿¸øÎ «‘ºˆ
+#pragma region Client Type Ï†ÑÏö© Ìï®Ïàò
 
 	bool CSocket::Connect(const CAddress* pAddress)
 	{
 		if (m_eType != TYPE::CLIENT)	return false;
 		if (pAddress == nullptr)		return false;
 
-		// º≠πˆøÕ ø¨∞·«ÿ¡÷¥¬ ±‚¥…
+		// ÏÑúÎ≤ÑÏôÄ Ïó∞Í≤∞Ìï¥Ï£ºÎäî Í∏∞Îä•
 		if (connect(m_pSocket, pAddress->Get_Addr(), pAddress->Get_Size()) == SOCKET_ERROR )
 		{
 			m_iLastError = WSAGetLastError();
 			return false;
 		}
 
-
-
 		return true;
 	}
 
 #pragma endregion
 
-#pragma region ∞¯øÎ
+#pragma region Í≥µÏö©
 
 
 #pragma endregion
+
+	bool CSocket::Get_LocalAddress(CAddress* pOutAddress)
+	{
+		if (pOutAddress == nullptr) return false;
+
+		sockaddr_storage tAddr{};
+		int iLen = sizeof(tAddr);
+		if (getsockname(m_pSocket, reinterpret_cast<SOCKADDR*>(&tAddr), &iLen) == SOCKET_ERROR)
+		{
+			m_iLastError = WSAGetLastError();
+			return false;
+		}
+
+		pOutAddress->Addr_Set(tAddr);   // CSocketÏùÄ CAddressÏùò friendÎùº private Ìï®Ïàò Ìò∏Ï∂ú Í∞ÄÎä•
+
+		return true;
+	}
 
 	std::unique_ptr<CSocket> CSocket::Create(TYPE eType, PROTOCAL_TYPE eProtocalType, NET_PROTOCOL_TYPE eNetProtocalType)
 	{
 		std::unique_ptr<CSocket> pSocket(new CSocket());
 
-		/* ¡ˆø™∫Øºˆ √≥∑≥ Ω·µµµ«≥◊ */
+		/* ÏßÄÏó≠Î≥ÄÏàò Ï≤òÎüº Ïç®ÎèÑÎêòÎÑ§ */
 		if (FAILED(pSocket->Initialize(eType, eProtocalType, eNetProtocalType)))
 			return nullptr;
 

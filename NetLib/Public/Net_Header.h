@@ -7,6 +7,9 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #include <cstdint>
+#include <functional>
+#include <array>
+
 
 #include "Funtion.h"
 #include "Enum.h"
@@ -14,6 +17,11 @@
 #include "CSocket.h"
 #include "CAddress.h"
 #include "CEventQueue.h"
+#include "CClient.h"
+#include "CServer.h"
+#include "Protected.h"		/* 메모리 변조 탐지 값 (클라용) */
+
+
 
 
 #ifdef _DEBUG

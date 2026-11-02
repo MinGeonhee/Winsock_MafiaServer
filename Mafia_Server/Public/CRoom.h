@@ -1,0 +1,118 @@
+﻿#pragma once
+
+namespace Net
+{
+	class CServer;
+}
+
+
+namespace MafiaServer
+{
+	class CChatting;
+	class CMafiaLogic;
+	class CServerApp;
+
+	class CRoom
+	{
+	public:
+		enum class STATE
+		{
+			WATING = 0,  // 게임 대기 상태
+			LOADING,	 // 시작 후 로딩 상태
+			GAME,		 // 게임 중
+			END,
+		};
+
+		enum class ENTER_RESULT
+		{
+			OK,
+			FULL_ROOM,
+			START_GAME,
+			ID_ERROR,
+			END,
+		};
+		struct Init_Data
+		{
+			Protocol::ROOM_KEY iRoomKey{};				//Room Key
+			Net::ClientKey     iRoomMasterClientKey{};	// Room Master Client Key
+			std::wstring	   wstrRoomName{};			//Room Name;
+		};
+	private:
+		CRoom();
+		HRESULT Initialize(const Init_Data& tData);
+	public:
+		virtual ~CRoom();
+	public:
+		const wchar_t*	   Get_Name()				const { return m_wszRoomName; }
+		Protocol::ROOM_KEY Get_Key()				const { return m_iRoomKey; }
+		uint16_t		   Get_CurPlayerNum()		const { return m_iCurPlayerNum; }
+		bool			   Get_IsPlaying()			const;
+		Net::ClientKey	   Get_MasterKey()			const { return m_iRoomMasterClientKey; }
+		/* 자리 7칸 (인덱스 = 자리 번호 - 1, 빈자리 = NONE_CLIENTKEY) */
+		const std::array<Net::ClientKey, Protocol::MAX_ROOM_PLAYER>& Get_PlayerKeys() const { return m_arrayPlayerClientKeys; }
+		bool			   Has_Player(Net::ClientKey iKey) const
+		{
+			return iKey != Net::NONE_CLIENTKEY && std::find(m_arrayPlayerClientKeys.begin(), m_arrayPlayerClientKeys.end(), iKey) != m_arrayPlayerClientKeys.end();
+		}
+		bool				Can_Start() const ;
+		/* 시작 승인 : 로딩(카운트다운) 시작. START_COUNTDOWN_MS 뒤 Update에서 게임으로 */
+		void				Start_Loading(ULONGLONG ullNow);
+	public:
+		Protocol::ENDGAME_RESULT Judge_EndGame();
+
+		/* 방 참여 신청 받기 */
+		ENTER_RESULT	Enter(Net::ClientKey iEnterPlayerClientKey);
+		void			Exit(Net::ClientKey iExitPlayerClientKey);
+
+		/* 매 프레임 : 시각은 CServerApp이 한 번 읽어 Pre_Update / Update에 같은 값으로 내려줌. 게임 중이면 게임 로직에 그대로 전달 */
+		void			Pre_Update(ULONGLONG ullNow);
+		void			Update(ULONGLONG ullNow);
+		void			LateUpdate(ULONGLONG ullNow);
+
+		/* 채팅 관련 */
+		/* 아래 요청 처리 : 반환 nullptr = 받아들임, 아니면 버린 이유 (서버 로그용) */
+		const wchar_t*	Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServere);
+
+		/* 투표 : 보낸 사람 자리를 찾아 로직에 넘김 (iSeat = NONE_SEAT 이면 무효표) */
+		const wchar_t*	Vote(Net::ClientKey iVoterKey, INT32 iSeat);
+		const wchar_t*	LastVote(Net::ClientKey iVoterKey, bool is);
+		const wchar_t*	Adjust_Time(Net::ClientKey iKey, bool isAdd, ULONGLONG ullNow);
+		const wchar_t*	Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction);	/* 보낸 사람 자리를 찾아 로직에 넘김 */
+
+		/* 방안의 모든 사람에게 패킷보내기 */
+		void			SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen, Net::CServer* pMainServer) const;
+
+		/* 자리 번호로 보내기 (게임 로직용) : 자리 → 키는 Room이 바꿈, 빈자리 · 나간 사람은 건너뜀 */
+		void			Send_ToSeat(INT32 iSeat, Protocol::PACKET_TYPE eType, const void* pBody, uint16_t usLen) const;
+		void			Send_ToAll(Protocol::PACKET_TYPE eType, const void* pBody, uint16_t usLen) const;
+		template<class T>
+		void			Send_ToSeat(INT32 iSeat, Protocol::PACKET_TYPE eType, const T& tBody) const { Send_ToSeat(iSeat, eType, &tBody, static_cast<uint16_t>(sizeof(T))); }
+		template<class T>
+		void			Send_ToAll(Protocol::PACKET_TYPE eType, const T& tBody) const { Send_ToAll(eType, &tBody, static_cast<uint16_t>(sizeof(T))); }
+
+	private:
+		void			Change_Master();
+		void			Send_ChangePhase(ULONGLONG uillNow);
+		void			Send_VoteResult();						/* VOTE 끝 : 지목된 자리 방 전원에게 */
+		void			Send_LastVoteResult();					/* VOTE 끝 : 지목된 자리 방 전원에게 */
+		void			End_Game();								/* GAME_RESULT : 이긴 팀 + 직업 공개 전송 → 게임 정리 → 대기로 */
+		int				Find_Seat(Net::ClientKey iKey) const;	/* 없으면 -1 */
+		void			Start_Game(ULONGLONG ullNow);		/* 로딩 끝 : 게임 상태 + 게임 로직 생성 */
+	public:
+		static std::unique_ptr<CRoom> Create(const Init_Data& tData);
+	private:
+		wchar_t				m_wszRoomName[Protocol::MAX_ROOMNAME_BUF];
+		CServerApp*			m_pServerApp;
+		STATE				m_eCurState;
+		Protocol::ROOM_KEY	m_iRoomKey; //방 전용 키
+		Net::ClientKey		m_iRoomMasterClientKey;
+
+		uint16_t			m_iCurPlayerNum;
+		std::array< Net::ClientKey , Protocol::MAX_ROOM_PLAYER > m_arrayPlayerClientKeys;
+		std::array< bool, Protocol::MAX_ROOM_PLAYER >	m_arrViewingResult{};	/* 자리별 : 게임 결과 창 보는 중 (확인 전엔 F5 막기용) */
+		std::unique_ptr<CChatting>		m_pChatting;
+		std::unique_ptr<CMafiaLogic>	m_pLogic;		/* 게임 중일 때만 (게임 시작에 만들고 끝나면 reset) */
+		ULONGLONG						m_ullLoadingStart{ 0 };	/* 로딩(카운트다운) 시작 시각 */
+	};
+}
+

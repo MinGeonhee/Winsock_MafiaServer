@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifndef PCH_H
 #define PCH_H
@@ -30,10 +30,8 @@
 /* Net Lib */
 #include "Net_Header.h"
 
-using ClientKey = uint64_t;
-constexpr ClientKey NONE_CLIENTKEY = 0;
-
-
+/* Protocol (정적 라이브러리) */
+#include "Protocol_Header.h"
 #include "Struct.h"
 
 
