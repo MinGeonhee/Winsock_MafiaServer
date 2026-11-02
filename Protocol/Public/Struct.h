@@ -141,6 +141,13 @@ namespace Protocol
 		bool		isPresident{ false };		/* 찬성이 많았지만 대통령이라 연행되지 않음 (iSeat = 그 대통령 자리) */
 	};
 
+	/* 클라 → 서버 : 낮 시간 스킵 · 추가 */
+	struct C_TO_S_ADJUST_TIME
+	{
+		Protocol::ROOM_KEY		iRoomKey{Protocol::NONE_ROOMKEY};
+		bool					isAdd{ false };
+	};
+
 	/* 클라 → 서버 : LAST_VOTE 단계 찬반 (찬성 = 처형) */
 	struct C_TO_S_LAST_VOTE
 	{
@@ -236,6 +243,14 @@ namespace Protocol
 	{
 		uint16_t		iCount{ 0 };
 		LOBBY_ROOM		arr[MAX_ROOM_PACKET_COUNT]{};
+	};
+
+	/* 낮 시간 스킵 · 추가 : 누가 썼는지 + 남은 시간 (방 전원) */
+	struct GAME_TIME : PROVIDE_DATA
+	{
+		INT32			iSeat{};
+		bool			isAdd{ false };
+		uint32_t		iRemainMs{};
 	};
 
 	struct GAME_LASTVOTE : PROVIDE_DATA

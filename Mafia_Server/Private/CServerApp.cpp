@@ -289,6 +289,15 @@ namespace MafiaServer
 			break;
 		}
 #pragma endregion
+		case Protocol::PACKET_TYPE::C_TO_S_ADJUST_TIME:
+		{
+			if (tEvent.Get_BodyLen() != sizeof(Protocol::C_TO_S_ADJUST_TIME)) break;
+			const Protocol::C_TO_S_ADJUST_TIME* pBody = reinterpret_cast<const Protocol::C_TO_S_ADJUST_TIME*>(tEvent.Get_Body());
+			if (pBody == nullptr) break;
+
+			Log_Reject(tEvent.iKey, L"시간", m_pRoomManager->Adjust_Time(pBody->iRoomKey, tEvent.iKey, pBody->isAdd, m_ullNow));
+			break;
+		}
 		case Protocol::PACKET_TYPE::C_TO_S_LAST_VOTE:
 		{
 #pragma region 최후의 투표 처리

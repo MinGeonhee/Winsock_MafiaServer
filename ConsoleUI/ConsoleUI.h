@@ -827,6 +827,9 @@ namespace ConsoleUI
 
 	/* ---------------- 방 (원탁 + 채팅) ---------------- */
 	/* 좌석 한 칸 (1번 = 맨 위, 시계 방향). strName이 비면 빈자리 */
+	/* 원탁 캐릭터 : 직업을 아는 사람만 그 모습 (모르면 시민 + 자리 색 옷) */
+	enum class SEAT_ART { CITIZEN, MAFIA, PRESIDENT, SNOOP, BODYGUARD, MEDIUM, SOLDIER, BETRAYER };
+
 	struct SeatView
 	{
 		std::wstring	strName;
@@ -836,6 +839,8 @@ namespace ConsoleUI
 		std::wstring	strRole;			// 의자 위 (직업 "🔪 마피아" 등, 비면 없음)
 		bool			isRoleRed{ false };	// 직업 색 : 빨강(마피아) / 초록(그 외)
 		int				iVotes{ -1 };		// 의자 아래 "투표 : N 표" (-1 = 안 보임)
+		SEAT_ART		eArt{ SEAT_ART::CITIZEN };
+		std::wstring	strIcon;			// 아는 직업 아이콘 (채팅 · 이름 옆, 비면 없음)
 	};
 
 	/* 채팅 한 줄 */
@@ -845,6 +850,8 @@ namespace ConsoleUI
 		std::wstring	strText;
 		bool			isMe{ false };
 		bool			isSystem{ false };	// "── 민수 님이 들어왔습니다 ──" 같은 회색 알림 줄
+		int				iSeat{ -1 };		// 보낸 사람 자리 (자리 색, -1 = 모름)
+		std::wstring	strIcon;			// 보낸 사람의 아는 직업 아이콘
 	};
 
 	struct RoomScreenView
@@ -880,6 +887,19 @@ namespace ConsoleUI
 		bool					isVoteTable{ false };	// 투표 · 찬반 중 : 탁자 붉게
 		bool					isSeatList{ false };	// 밤 · 투표 : 탁자 대신 자리 목록 (↑↓ 로 고르기, 투표면 표 수 · 무효표 줄도)
 		uint8_t					iPickMask{ 0 };			// 밤 목록에서 고를 수 있는 자리 (비트 i = i번 자리)
+
+		/* 밤 능력 화면 : 왼쪽 직업 장면(도트) + 오른쪽 대상 목록. Tab으로 원탁 · 채팅과 번갈아 봄 */
+		enum class NIGHT_SCENE { NONE, MAFIA, BETRAYER, MEDIUM, SNOOP, PRESIDENT, BODYGUARD };
+		NIGHT_SCENE				eNightScene{ NIGHT_SCENE::NONE };
+		bool					isSceneView{ false };	// true = 능력 화면 / false = 원탁 · 채팅
+		int						iSceneFrame{ 0 };		// 장면 애니메이션 프레임
+		int						iSkillTab{ 0 };			// 배신자 탭 : 0 없음 / 1 직업 탐색 / 2 접선
+		bool					isFindUsed{ false };	// 배신자 : 직업 탐색 소진
+		std::wstring			strSkillStatus;			// 배신자 : "접선 완료 : 4번" (비면 없음)
+		std::wstring			strTableWait;			// 넘어가는 단계 : 시계 대신 탁자에 띄울 글 ("아침 기다리는 중", 비면 시계)
+		int						iSpotSeat{ -1 };		// 최후 변론 : 조명 받는 자리 (-1 = 원탁)
+		std::wstring			strDoneLabel;			// 막대 확정 문구 (비면 "처치 완료"처럼, 접선 : "접선 성공" / "접선 실패")
+		bool					isDoneFail{ false };	// 막대를 붉게 (접선 실패)
 		std::wstring			strPresident;			// 대통령 공지 (왼쪽 위 띠, 비면 없음)
 
 		/* 처형 연출 (원탁 위를 덮는 상자) : 프레임 길이는 Scene이 정함 */
@@ -1033,6 +1053,7 @@ namespace ConsoleUI
 			CPixels(int iW, int iH) : m_iW{ iW }, m_iH{ iH }, m_vecPx(static_cast<size_t>(iW * iH)) {}
 
 			void Set(int x, int y, Px tPx) { if (tPx.isOn && x >= 0 && x < m_iW && y >= 0 && y < m_iH) m_vecPx[static_cast<size_t>(y * m_iW + x)] = tPx; }
+			Px   Get(int x, int y) const { return (x >= 0 && x < m_iW && y >= 0 && y < m_iH) ? At(x, y) : Px{}; }
 
 			/* 글자 그림 한 장을 (ox, oy)에 덮음 : '.' = 투명, 나머지 글자는 fnColor(글자)로 색을 정함 */
 			template <typename F>
@@ -1693,6 +1714,8 @@ namespace ConsoleUI
 			}
 		}
 
+		inline const wchar_t* Seat_Color(int iSeat);
+
 		/* 밤 · 투표 : 원탁 대신 자리 목록 한 줄씩 (↑↓ 로 고르기). 고른 줄은 색 띠, 못 고르는 줄은 회색
 		   투표면 붉은 테두리 + 줄 오른쪽에 받은 표 수 + 맨 아래 무효표 줄 */
 		inline void Draw_SeatList(CCanvas& tCanvas, int iBoxTop, int iBoxLeft, int iBoxW, int iBoxH, const RoomScreenView& tView)
@@ -1742,7 +1765,7 @@ namespace ConsoleUI
 					Put(r, BAND_L, strBand, BAND[std::clamp(tView.iPickColor, 0, 2)]);
 					continue;
 				}
-				const wchar_t* szText = isEmpty || tSeat.isDead ? GRAY : (tSeat.isMe ? ME : (tView.isVoting && !isAble ? GRAY : WHITE));
+				const wchar_t* szText = isEmpty || tSeat.isDead ? GRAY : (tSeat.isMe ? WHITE : (tView.isVoting && !isAble ? GRAY : Seat_Color(i)));
 				Put(r, BAND_L, isEmpty ? L"    " + std::to_wstring(i + 1) + L"번   빈자리" : strLine, szText);
 				if (!tSeat.strRole.empty()) Put(r, BAND_L + iTagCol, tSeat.strRole, tSeat.isDead ? GRAY : (tSeat.isRoleRed ? L"\x1b[1;91m" : L"\x1b[1;92m"));
 				if (tSeat.isDead) Put(r, BAND_L + iStateCol, L"☠ 사망", GRAY);
@@ -1758,6 +1781,340 @@ namespace ConsoleUI
 				else
 					Put(r, BAND_L, L"    0    무효표", GRAY);
 			}
+		}
+
+		/* 자리 색 (1 ~ 7번) : 빨강 주황 노랑 초록 파랑 분홍 보라 */
+		inline const wchar_t* Seat_Color(int iSeat)
+		{
+			static const wchar_t* const COLOR[7] = {
+				L"\x1b[1;38;2;232;72;85m", L"\x1b[1;38;2;255;159;67m", L"\x1b[1;38;2;245;213;71m", L"\x1b[1;38;2;63;195;90m",
+				L"\x1b[1;38;2;59;123;240m", L"\x1b[1;38;2;255;126;182m", L"\x1b[1;38;2;165;108;240m" };
+			return COLOR[std::clamp(iSeat, 0, 6)];
+		}
+
+		/* 원탁 캐릭터 (9 x 8, 영매만 11 x 9) : 'C' = 자리 색 옷, '.' = 투명 */
+		inline constexpr const wchar_t* SEAT_SPRITE[8][9] = {
+			{ L"..HHHHH..", L"..FFFFF..", L"..FEFEF..", L"..FFFFF..", L".CCCCCCC.", L"CCCCCCCCC", L"CCCCCCCCC", L"CCCCCCCCC", nullptr },
+			{ L"..kkkkk..", L"kkRRRRRkk", L"..FFFFF..", L"..FEFEF..", L"..FMMMF..", L"KKKWTWKKK", L"KKKWTWKKK", L"KKKKKKKKK", nullptr },
+			{ L"..QQQQQ..", L"..QFFFF..", L"..FEFEF..", L"..FFmFF..", L"NNNWTWGGN", L"NNNWGGGNN", L"NNGGGNNNN", L"GGGNNNNNN", nullptr },
+			{ L"...BBB...", L".BBBBBBB.", L"..FFFFF..", L"..FEFEF..", L"DDDDWDDDD", L"DDDDWDDDD", L"DDDDDDDDD", L"DDDDDDDDD", nullptr },
+			{ L"..HHHHH..", L"..FFFFF..", L"..kkkkk..", L"..FFFFF..", L"KKKWkWKKK", L"XXKWkWKKK", L"XXKKKKKKK", L"XXKKKKKKK", nullptr },
+			{ L"...HHHHH...", L"..HFFFFFH..", L"..HFEFEFH..", L"..HFFFFFH..", L"iIII333IIIi", L"iII31113IIi", L"iF3211113Fi", L"iII31113IIi", L"iIII333IIIi" },
+			{ L"..LLLLL..", L".LLLLLLL.", L"..FFFFF..", L"..FEFEF..", L"LLLlllLLL", L"LLLLLLLLL", L"LlLLLLLlL", L"LLLLLLLLL", nullptr },
+			{ L"..HHHHH..", L"..FFfff..", L"..FEfEf..", L"..FFSSfAA", L"KKKWTWKKK", L"KKKWTWKKK", L"KKKKTKKKK", L"KKKKKKKKK", nullptr } };
+
+		inline Px Seat_Pal(wchar_t c, int iSeat, bool isGray)
+		{
+			static constexpr int SEAT[7][3] = { { 232, 72, 85 }, { 255, 159, 67 }, { 245, 213, 71 }, { 63, 195, 90 }, { 59, 123, 240 }, { 255, 126, 182 }, { 165, 108, 240 } };
+			int r = 0, g = 0, b = 0;
+			switch (c)
+			{
+			case L'C': { const int* a = SEAT[std::clamp(iSeat, 0, 6)]; r = a[0]; g = a[1]; b = a[2]; break; }
+			case L'H': r = 28;  g = 22;  b = 18;  break;
+			case L'F': r = 201; g = 143; b = 99;  break;
+			case L'f': r = 138; g = 95;  b = 63;  break;
+			case L'E': r = 17;  g = 17;  b = 17;  break;
+			case L'W': r = 236; g = 232; b = 222; break;
+			case L'T': r = 192; g = 27;  b = 42;  break;
+			case L'K': r = 42;  g = 45;  b = 54;  break;
+			case L'k': r = 5;   g = 5;   b = 7;   break;
+			case L'R': r = 176; g = 26;  b = 37;  break;
+			case L'G': r = 232; g = 195; b = 74;  break;
+			case L'N': r = 39;  g = 64;  b = 122; break;
+			case L'B': r = 160; g = 121; b = 63;  break;
+			case L'D': r = 138; g = 106; b = 60;  break;
+			case L'L': r = 90;  g = 107; b = 46;  break;
+			case L'l': r = 63;  g = 76;  b = 32;  break;
+			case L'S': r = 58;  g = 20;  b = 8;   break;
+			case L'A': r = 255; g = 138; b = 42;  break;
+			case L'X': r = 63;  g = 127; b = 216; break;
+			case L'M': r = 90;  g = 58;  b = 34;  break;
+			case L'Q': r = 184; g = 188; b = 196; break;
+			case L'm': r = 122; g = 58;  b = 34;  break;
+			case L'I': r = 124; g = 132; b = 153; break;
+			case L'i': r = 92;  g = 100; b = 120; break;
+			case L'1': r = 201; g = 166; b = 255; break;
+			case L'2': r = 255; g = 255; b = 255; break;
+			case L'3': r = 122; g = 75;  b = 224; break;
+			default: break;
+			}
+			if (isGray) { const int v = (r + g + b) * 15 / 100; r = g = b = (c == L'E') ? 216 : v; }
+			return Make_Px(r, g, b);
+		}
+
+		/* ---- 밤 능력 장면 (가로 40 x 세로 34 도트) : 그림은 28줄 기준으로 그리고 위아래 3줄은 배경을 늘림 ---- */
+		struct CNightArt
+		{
+			static constexpr int W = 40, H = 34, OY = 3;
+			CPixels& p;
+
+			static Px Hex(uint32_t c) { return Make_Px((c >> 16) & 255, (c >> 8) & 255, c & 255); }
+			static double Rnd(int x, int y) { const double n = sin(x * 12.9898 + y * 78.233) * 43758.5453; return n - floor(n); }
+
+			void R(int x, int y, int w, int h, uint32_t c) const { for (int j = y; j < y + h; ++j) for (int i = x; i < x + w; ++i) p.Set(i, j + OY, Hex(c)); }
+			void P(int x, int y, uint32_t c) const { p.Set(x, y + OY, Hex(c)); }
+			void O(int cx, int cy, int r, uint32_t c) const { for (int j = -r; j <= r; ++j) for (int i = -r; i <= r; ++i) if (i * i + j * j <= r * r + 1) P(cx + i, cy + j, c); }
+			void L(int a, int b, int x, int y, uint32_t c) const
+			{
+				const int d = (std::max)(abs(x - a), abs(y - b));
+				for (int k = 0; k <= d; ++k) P(a + (x - a) * k / (std::max)(d, 1), b + (y - b) * k / (std::max)(d, 1), c);
+			}
+			void Bands(std::initializer_list<std::array<uint32_t, 3>> list) const		/* {y, 높이, 색} : 첫 줄은 위로, 끝 줄은 아래로 늘림 */
+			{
+				for (const auto& a : list) R(0, static_cast<int>(a[0]), W, static_cast<int>(a[1]), a[2]);
+				R(0, -OY, W, OY, list.begin()[0][2]);
+				R(0, 28, W, OY, list.begin()[list.size() - 1][2]);
+			}
+			void Skyline(uint32_t c, std::initializer_list<int> list) const { int x = 0, i = 0; for (int v : list) { const int w = 5 + i % 3 * 2; R(x, 28 - v, w, v, c); x += w; ++i; } }
+			void Stars(uint32_t c) const { for (int k = 0; k < 16; ++k) P(static_cast<int>(Rnd(k, 4) * 41), static_cast<int>(Rnd(k, 5) * 14), c); }
+
+			void Mafia(int t) const
+			{
+				Bands({ { { 0, 6, 0x1a0508 } }, { { 6, 6, 0x2b080d } }, { { 12, 6, 0x420c13 } }, { { 18, 10, 0x5c1119 } } });
+				O(33, 7, 5, 0xd8323c); O(31, 5, 1, 0xec5a5f); O(36, 9, 1, 0xa81f2a);
+				Skyline(0x14060a, { 9, 13, 7, 11, 15, 8, 12, 10 });
+				R(0, 25, W, 6, 0x0a0204);
+				R(6, 4, 13, 1, 0x0d0d10); R(8, 1, 9, 3, 0x111116); R(8, 3, 9, 1, 0xb01a25);
+				R(9, 5, 7, 4, 0xc98f63); R(9, 5, 7, 1, 0x7a5233); P(11, 6, 0x111111); P(14, 6, 0x111111); R(10, 8, 5, 1, 0x5a3a22);
+				R(6, 9, 13, 16, 0x15151b); R(11, 9, 3, 6, 0xe8e4dc); R(12, 10, 1, 5, 0xb01a25); R(9, 25, 3, 3, 0x08080b); R(14, 25, 3, 3, 0x08080b);
+				R(19, 15, 8, 2, 0x15151b); R(27, 14, 5, 2, 0x55585f); R(27, 16, 2, 2, 0x2a2c30); R(25, 15, 2, 2, 0xc98f63);
+				if (t % 12 < 2) { P(33, 14, 0xffe27a); P(34, 15, 0xff9f43); P(34, 13, 0xff9f43); P(35, 14, 0xffd34a); }
+				for (int k = 0; k < 3; ++k) { const int s = (t / 2 + k * 5) % 12; P(16 + static_cast<int>(sin(s)), 8 - s, 0x7a7a7a); }
+			}
+			void Betrayer(int t) const
+			{
+				Bands({ { { 0, 10, 0x0a1730 } }, { { 10, 12, 0x0f2042 } }, { { 22, 6, 0x1a1c24 } } });
+				Stars(0x3a5280); R(0, 22, W, 1, 0x2a2c35);
+				O(33, 6, 4, 0xecdca0); O(35, 5, 4, 0x0a1730);
+				for (const auto& a : { std::array<int, 2>{ 1, 10 }, { 8, 8 }, { 27, 8 }, { 34, 10 } })		/* 뒤의 시민들 */
+				{
+					O(a[0] + 3, a[1] + 2, 2, 0x48577a); R(a[0], a[1] + 5, 7, 13, 0x39465e); R(a[0] + 1, a[1] + 18, 2, 4, 0x39465e); R(a[0] + 4, a[1] + 18, 2, 4, 0x39465e);
+				}
+				constexpr uint32_t SK = 0xc98f63, SD = 0x8a5f3f, HAIR = 0x0c0b0c;
+				R(12, 4, 8, 15, SK); R(20, 4, 8, 15, SD); R(11, 6, 2, 6, SK); R(27, 6, 2, 6, SD);
+				R(12, 2, 16, 4, HAIR); R(11, 3, 2, 5, HAIR); R(27, 3, 2, 5, HAIR); R(20, 5, 1, 14, 0x6d4a30);
+				/* 왼쪽 : 웃는 얼굴 */
+				R(14, 8, 4, 1, 0x2a1a10); P(14, 10, 0x111111); R(15, 9, 2, 1, 0x111111); P(17, 10, 0x111111);
+				P(13, 13, 0xa86f4a); P(14, 14, 0x7a3a22); R(15, 15, 4, 1, 0x7a3a22); P(19, 14, 0x7a3a22); R(15, 14, 4, 1, 0xf5f0e6);
+				/* 오른쪽 : 비웃는 얼굴 + 담배 (눈은 가끔만 붉게) */
+				R(21, 10, 2, 1, 0x050505); R(23, 9, 2, 1, 0x050505); R(25, 8, 2, 1, 0x050505);
+				R(22, 11, 4, 1, 0xe8e4dc); R(23, 11, 2, 1, t % 30 < 4 ? 0xff2233 : 0x111111);
+				R(21, 15, 3, 1, 0x2a140a); R(23, 14, 3, 1, 0x2a140a); R(25, 13, 2, 1, 0x2a140a);
+				R(26, 13, 6, 1, 0xf0ebdf); R(26, 12, 6, 1, 0xcfc9ba); R(32, 12, 1, 2, t % 6 < 3 ? 0xff6a2a : 0xffb04a);
+				for (int k = 0; k < 4; ++k) { const int s = (t / 2 + k * 7 / 2) % 12; P(33 + static_cast<int>(sin(s * .9) * 1.2), 11 - s, s < 6 ? 0xd8d8d8 : 0x8a8a8a); }
+				R(16, 19, 9, 2, SD); R(4, 21, 33, 10, 0x0d0d12); R(4, 21, 33, 1, 0x2e2e38); R(16, 21, 9, 5, 0xece8de); R(19, 21, 3, 10, 0xc01b2a); R(20, 21, 1, 2, 0xe8404c);
+			}
+			void Medium(int t) const
+			{
+				Bands({ { { 0, 8, 0x100824 } }, { { 8, 8, 0x180c36 } }, { { 16, 12, 0x1f1045 } } });
+				for (int k = 0; k < 26; ++k) if ((t + k * 7) % 24 < 16) P(static_cast<int>(Rnd(k, 3) * 41), static_cast<int>(Rnd(k, 9) * 16), k % 3 ? 0x7a6acb : 0xc8bdf5);
+				R(0, 22, W, 9, 0x3a1a55); R(0, 22, W, 1, 0x6a3a8a); for (int x = 0; x < W; x += 4) R(x, 23, 2, 8, 0x2c1342);
+				for (int j = -8; j <= 8; ++j) for (int i = -8; i <= 8; ++i)		/* 수정구슬 소용돌이 */
+				{
+					if (i * i + j * j > 66) continue;
+					const double v = sin((atan2(j, i) + t * 0.12) * 3 + sqrt(i * i + j * j) * 0.9);
+					P(20 + i, 15 + j, v > 0.6 ? 0xb28bff : v > 0 ? 0x6d4bd6 : 0x3c2a9a);
+				}
+				O(17, 12, 2, 0xe6dcff); R(13, 22, 15, 2, 0xc9a24a); R(15, 24, 11, 2, 0x8a6a28);
+				const int by = static_cast<int>(round(sin(t * 0.18) * 1.5));		/* 유령 */
+				R(17, 2 + by, 7, 3, 0xdfe9ff); R(16, 3 + by, 9, 3, 0xdfe9ff); P(16, 6 + by, 0xdfe9ff); P(20, 6 + by, 0xdfe9ff); P(24, 6 + by, 0xdfe9ff); P(18, 3 + by, 0x16122c); P(22, 3 + by, 0x16122c);
+				for (int i = 0; i < 2; ++i)		/* 양초 */
+				{
+					const int x = i ? 35 : 4; const bool f = (t + i * 3) % 6 < 3;
+					R(x, 18, 3, 7, 0xe8e0c8); R(x, 18, 1, 7, 0xfff6df); R(x - 1, 25, 5, 1, 0x8a6a28); P(x + 1, 17, 0xfff2a0); P(x + 1, 16, f ? 0xff9f43 : 0xffc966); P(x + (f ? 0 : 2), 15, 0xff7a2a);
+				}
+			}
+			void Snoop(int t) const
+			{
+				for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) { const double r = Rnd(x, y); p.Set(x, y, Hex(r < .2 ? 0x6b4a2a : r < .6 ? 0x7b5832 : 0x86623a)); }
+				L(7, 5, 21, 7, 0xd8323c); L(21, 7, 34, 4, 0xd8323c); L(21, 7, 10, 19, 0xd8323c); L(21, 7, 24, 20, 0xd8323c); L(34, 4, 36, 17, 0xd8323c);
+				const int PH[6][2] = { { 3, 2 }, { 17, 4 }, { 30, 1 }, { 6, 16 }, { 20, 17 }, { 30, 14 } };
+				for (int i = 0; i < 6; ++i)
+				{
+					const int x = PH[i][0], y = PH[i][1];
+					R(x, y, 9, 10, 0xece6d6); R(x + 1, y + 1, 7, 6, 0x2c2c34); O(x + 4, y + 3, 1, 0x8d8d98); R(x + 2, y + 5, 5, 2, 0x8d8d98); P(x + 4, y, 0xd8323c);
+					if (i == 1 || i == 4) R(x + 1, y + 8, 7, 1, 0xd8323c); else R(x + 2, y + 8, 5, 1, 0x999999);
+				}
+				const double a = t * 0.05;		/* 돋보기 */
+				const int mx = 20 + static_cast<int>(sin(a) * 12), my = 12 + static_cast<int>(sin(a * 1.7) * 6);
+				for (int j = -6; j <= 6; ++j) for (int i = -6; i <= 6; ++i)
+				{
+					const int d = i * i + j * j;
+					if (d > 36) continue;
+					if (d > 25) { P(mx + i, my + j, 0xd8dce3); continue; }
+					const Px tOld = p.Get(mx + i, my + j + OY);
+					if (tOld.isOn) p.Set(mx + i, my + j + OY, Make_Px((std::min)(255, tOld.r + 45), (std::min)(255, tOld.g + 45), (std::min)(255, tOld.b + 50)));
+				}
+				L(mx + 4, my + 4, mx + 10, my + 10, 0x3a2413); L(mx + 5, my + 4, mx + 11, my + 10, 0x6a4524);
+			}
+			void President(int t) const
+			{
+				Bands({ { { 0, 20, 0x0f1d3a } }, { { 20, 8, 0x3a2412 } } });
+				for (int x = 0; x < W; x += 6) R(x, -OY, 1, 20 + OY, 0x16284d);
+				R(13, 2, 16, 12, 0xc8a94a); R(14, 3, 14, 10, 0x14213f); O(21, 8, 3, 0xdfe6f5); O(22, 7, 3, 0x14213f);
+				auto Wave = [&](int x) { return static_cast<int>(round(sin(t * .25 + x * .8))); };
+				for (int x = 0; x < 8; ++x)
+				{
+					int d = Wave(x);	R(3 + x, 3 + d, 1, 3, 0xd8323c); R(3 + x, 6 + d, 1, 3, 0xeeeeee); R(3 + x, 9 + d, 1, 3, 0x2a5bd8);
+					d = Wave(x + 3);	R(31 + x, 3 + d, 1, 3, 0xd8323c); R(31 + x, 6 + d, 1, 3, 0xeeeeee); R(31 + x, 9 + d, 1, 3, 0x2a5bd8);
+				}
+				R(2, 1, 1, 19, 0xc8a94a); R(39, 1, 1, 19, 0xc8a94a);
+				R(16, 8, 9, 6, 0xd3a07a); R(16, 6, 9, 3, 0xb8bcc4); R(16, 8, 2, 2, 0xb8bcc4); P(18, 10, 0x111111); P(22, 10, 0x111111); R(19, 12, 3, 1, 0x7a4a2a);
+				R(13, 14, 15, 8, 0x27407a); R(19, 14, 3, 5, 0xefefef); R(20, 14, 1, 5, 0xd8323c);
+				R(22, 14, 5, 2, 0xe8c34a); R(18, 16, 6, 2, 0xe8c34a); R(14, 18, 6, 2, 0xe8c34a); R(13, 20, 3, 2, 0xe8c34a);		/* 금 휘장 */
+				R(10, 20, 21, 11, 0x7a5230); R(10, 20, 21, 1, 0xc8a94a); O(20, 24, 2, 0xc8a94a); P(20, 24, 0x7a5230);
+				R(25, 17, 1, 3, 0x777777); R(24, 16, 3, 1, 0xbbbbbb);
+				if (t % 40 < 2) { O(4, 16, 2, 0xffffff); O(36, 17, 2, 0xffffff); }
+				else if (t % 40 < 4) { O(4, 16, 1, 0xc9d8ff); O(36, 17, 1, 0xc9d8ff); }
+			}
+			void Bodyguard(int t) const
+			{
+				Bands({ { { 0, 10, 0x0a1730 } }, { { 10, 12, 0x0f2042 } }, { { 22, 6, 0x1a1c24 } } });
+				O(30, 6, 4, 0xecdca0); O(32, 5, 4, 0x0a1730); Stars(0x3a5280); R(0, 22, W, 1, 0x2a2c35);
+				R(30, 6, 9, 8, 0x30384a); R(31, 4, 7, 4, 0x30384a); R(28, 12, 12, 13, 0x30384a);		/* 뒤에 지키는 사람 */
+				R(14, 5, 9, 7, 0xc98f63); R(14, 3, 9, 4, 0x0c0b0c); R(14, 7, 4, 2, 0x050507); R(19, 7, 4, 2, 0x050507); P(18, 7, 0x050507);
+				R(13, 12, 12, 14, 0x0d0d12); R(16, 12, 5, 6, 0xece8de); R(18, 12, 1, 7, 0x141419); R(14, 26, 4, 2, 0x050507); R(20, 26, 4, 2, 0x050507);
+				R(4, 4, 10, 22, 0x8fa2b6); R(4, 4, 1, 22, 0xdfe7ef); R(13, 4, 1, 22, 0x5d6c7c); R(5, 5, 8, 20, 0xa9bccf); R(6, 12, 6, 3, 0x1f5fbf); R(8, 8, 2, 1, 0x2d3a48);		/* 투명 방패 */
+				R(12, 14, 3, 2, 0xc98f63);
+				if (t % 24 < 4) { const int s = t % 24; P(3 - s, 10 - s, 0xffe27a); P(2 - s, 12 + s, 0xff9f43); P(3, 11, 0xffffff); P(2, 11, 0xffd34a); L(0, 10, 3, 11, 0xffd34a); }
+			}
+		};
+
+		/* 밤 능력 화면 : 왼쪽 장면 + 오른쪽 대상 목록 (원탁 영역을 덮음) */
+		inline void Draw_NightSkill(CCanvas& tCanvas, int iBoxTop, int iBoxLeft, int iBoxW, int iBoxH, const RoomScreenView& tView)
+		{
+			using SCENE = RoomScreenView::NIGHT_SCENE;
+			struct Style { const wchar_t* szEdge; const wchar_t* szBand; const wchar_t* szTitle; const wchar_t* szDesc[2]; };
+			Style tStyle{};
+			switch (tView.eNightScene)
+			{
+			case SCENE::MAFIA:		tStyle = { L"\x1b[1;38;2;232;72;85m",	L"\x1b[1;97;48;2;179;22;31m",	L"처치 대상",	{ L"밤마다 한 명 처치", L"경호원이 지키면 실패" } }; break;
+			case SCENE::BETRAYER:	tStyle = { L"\x1b[1;38;2;232;154;74m",	L"\x1b[1;97;48;2;154;90;18m",	tView.iSkillTab == 1 ? L"탐색할 사람" : L"접선할 사람",	{ L"하루에 하나만 사용", L"탐색은 게임당 1회" } }; break;
+			case SCENE::MEDIUM:		tStyle = { L"\x1b[1;38;2;181;140;240m",	L"\x1b[1;97;48;2;90;45;140m",	L"부를 영혼",	{ L"죽은 사람 직업 확인", L"결과는 나에게만 보임" } }; break;
+			case SCENE::SNOOP:		tStyle = { L"\x1b[1;38;2;90;169;240m",	L"\x1b[1;97;48;2;31;111;181m",	L"조사 대상",	{ L"둘째 밤부터 한 명 조사", L"배신자는 마피아 아님" } }; break;
+			case SCENE::PRESIDENT:	tStyle = { L"\x1b[1;38;2;232;195;74m",	L"\x1b[1;97;48;2;138;106;18m",	L"공지 작성",	{ L"왼쪽 위 띠로 전원에게", L"보입니다" } }; break;
+			case SCENE::BODYGUARD:	tStyle = { L"\x1b[1;38;2;63;195;90m",	L"\x1b[1;97;48;2;18;156;44m",	L"지킬 사람",	{ L"밤마다 한 명 지키기", L"자기 자신도 가능" } }; break;
+			default: return;
+			}
+
+			static const wchar_t* const WHITE = L"\x1b[1;97m";
+			static const wchar_t* const GRAY  = L"\x1b[90m";
+			static const wchar_t* const ME    = L"\x1b[1;94m";
+			static const wchar_t* const GREEN = L"\x1b[1;92m";
+			auto Put = [&](int r, int c, const std::wstring& str, const wchar_t* sz) { tCanvas.Put(iBoxTop + r, iBoxLeft + c, str, sz); };
+
+			Put(0, 0, L"╭" + std::wstring(iBoxW - 2, L'─') + L"╮", tStyle.szEdge);
+			for (int r = 1; r < iBoxH - 1; ++r) Put(r, 0, L"│" + std::wstring(iBoxW - 2, L' ') + L"│", tStyle.szEdge);
+			Put(iBoxH - 1, 0, L"╰" + std::wstring(iBoxW - 2, L'─') + L"╯", tStyle.szEdge);
+			const std::wstring strTitle = L" 🌙 " + std::to_wstring(tView.iDay) + L"일차   " + tView.strSub + L" ";
+			Put(0, Center_Col(strTitle, iBoxW), strTitle, tStyle.szEdge);
+
+			/* 왼쪽 장면 */
+			CPixels tPx(CNightArt::W, CNightArt::H);
+			const CNightArt tArt{ tPx };
+			const int t = tView.iSceneFrame;
+			switch (tView.eNightScene)
+			{
+			case SCENE::MAFIA:		tArt.Mafia(t);		break;
+			case SCENE::BETRAYER:	tArt.Betrayer(t);	break;
+			case SCENE::MEDIUM:		tArt.Medium(t);		break;
+			case SCENE::SNOOP:		tArt.Snoop(t);		break;
+			case SCENE::PRESIDENT:	tArt.President(t);	break;
+			default:				tArt.Bodyguard(t);	break;
+			}
+			tPx.Flush(tCanvas, iBoxTop + 1, iBoxLeft + 1);
+
+			/* 오른쪽 칸 */
+			constexpr int SEP = 41, COL = 43, BAND_L = 42, BAND_W = 23, TAG = 12;
+			for (int r = 1; r < iBoxH - 1; ++r) Put(r, SEP, L"│", tStyle.szEdge);
+			Put(2, COL, tStyle.szTitle, tStyle.szEdge);
+
+			if (tView.eNightScene == SCENE::PRESIDENT)
+			{
+				const std::wstring strText = !tView.strInput.empty() ? tView.strInput : tView.strPresident;
+				Put(4, COL - 1, L"┌" + std::wstring(20, L'─') + L"┐", tStyle.szEdge);
+				for (int r = 5; r < 10; ++r) { Put(r, COL - 1, L"│", tStyle.szEdge); Put(r, COL + 20, L"│", tStyle.szEdge); }
+				Put(10, COL - 1, L"└" + std::wstring(20, L'─') + L"┘", tStyle.szEdge);
+				const std::vector<std::wstring> vecLines = Wrap(strText, 18, 18);
+				for (int i = 0; i < 5 && i < static_cast<int>(vecLines.size()); ++i) Put(5 + i, COL + 1, vecLines[i], WHITE);
+			}
+			else
+			{
+				if (tView.eNightScene == SCENE::BETRAYER)
+				{
+					const bool isFind = tView.iSkillTab == 1, isCon = tView.iSkillTab == 2;
+					Put(3, COL, tView.isFindUsed ? L" 탐색 끝 " : L" 탐색 1회 ", isFind ? L"\x1b[1;30;48;2;232;154;74m" : GRAY);
+					if (tView.strSkillStatus.empty()) Put(3, COL + 11, L" 접선 ", isCon ? L"\x1b[1;30;48;2;232;154;74m" : GRAY);
+				}
+				for (int i = 0; i < 7; ++i)
+				{
+					const SeatView& tSeat = tView.arrSeats[i];
+					const int r = 4 + i;
+					const bool isPick = tView.isVoting && tView.iVoteSel == i;
+					const bool isAble = tView.isVoting && ((tView.iPickMask >> i) & 1);
+					const bool isEmpty = tSeat.strName.empty();
+					std::wstring strLine = (isPick ? (tView.isVoteDone ? L"* " : L"▶ ") : L"  ") + std::to_wstring(i + 1) + L"번";
+					if (tSeat.isMe) strLine += L" (나)";
+					const std::wstring strTag = !tSeat.strRole.empty() ? tSeat.strRole : (tSeat.isDead ? L"사망" : L"");
+					if (isPick) { Put(r, BAND_L, Fit(L" " + strLine, TAG) + Fit(strTag, BAND_W - TAG), tStyle.szBand); continue; }
+
+					const wchar_t* szText = (isEmpty || (tSeat.isDead && !isAble) || (tView.isVoting && !isAble && !tSeat.isMe)) ? GRAY : (tSeat.isMe ? WHITE : Seat_Color(i));
+					Put(r, BAND_L, L" " + strLine, szText);
+					if (!strTag.empty()) Put(r, BAND_L + TAG, strTag, tSeat.isDead ? GRAY : (tSeat.isRoleRed ? L"\x1b[1;91m" : GREEN));
+				}
+				if (!tView.strSkillStatus.empty()) Put(12, COL, tView.strSkillStatus, GREEN);
+			}
+			Put(14, COL - 1, tStyle.szDesc[0], GRAY);
+			Put(15, COL - 1, tStyle.szDesc[1], GRAY);
+		}
+
+		/* 최후 변론 : 어두운 곳에 조명 하나, 지목된 사람만 크게 */
+		inline void Draw_Allocution(CCanvas& tCanvas, int iBoxTop, int iBoxW, int iBoxH, const RoomScreenView& tView)
+		{
+			const int iSeat = std::clamp(tView.iSpotSeat, 0, 6);
+			const SeatView& tSeat = tView.arrSeats[iSeat];
+			const int W = iBoxW, H = iBoxH * 2, CX = W / 2;
+			CPixels tPx(W, H);
+			for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) tPx.Set(x, y, Make_Px(8, 8, 12));
+			for (int y = 0; y < H - 4; ++y)		/* 위에서 퍼지는 조명 */
+			{
+				const int hw = 5 + y * 11 / 20;
+				const int v = y < H / 3 ? 38 : (y < H * 2 / 3 ? 47 : 58);
+				for (int x = CX - hw; x <= CX + hw; ++x) tPx.Set(x, y, Make_Px(v, v, v + 8));
+			}
+			for (int y = H - 4; y < H; ++y) for (int x = 0; x < W; ++x) tPx.Set(x, y, Make_Px(22, 22, 28));
+			for (int y = H - 4; y < H - 2; ++y) for (int x = CX - 22; x <= CX + 22; ++x) tPx.Set(x, y, Make_Px(74, 74, 86));
+			for (int x = CX - 10; x <= CX + 10; ++x) tPx.Set(x, 0, Make_Px(90, 90, 102));
+			for (int y = 0; y < 2; ++y) for (int x = CX - 3; x <= CX + 3; ++x) tPx.Set(x, y, Make_Px(245, 232, 168));
+
+			/* 사람 : 원탁 캐릭터를 2배로 */
+			const int iArt = static_cast<int>(tSeat.eArt);
+			int iWide = 0; while (SEAT_SPRITE[iArt][0][iWide]) ++iWide;
+			const int ox = CX - iWide, oy = H - 4 - 2 * (SEAT_SPRITE[iArt][8] ? 9 : 8);
+			for (int y = 0; y < 9 && SEAT_SPRITE[iArt][y]; ++y)
+				for (int x = 0; SEAT_SPRITE[iArt][y][x]; ++x)
+				{
+					if (SEAT_SPRITE[iArt][y][x] == L'.') continue;
+					const Px tColor = Seat_Pal(SEAT_SPRITE[iArt][y][x], iSeat, false);
+					for (int j = 0; j < 2; ++j) for (int i = 0; i < 2; ++i) tPx.Set(ox + x * 2 + i, oy + y * 2 + j, tColor);
+				}
+			tPx.Flush(tCanvas, iBoxTop, 0);
+
+			auto Center = [&](int r, const std::wstring& str, const wchar_t* sz) { tCanvas.Put(iBoxTop + r, Center_Col(str, W), str, sz); };
+			static const wchar_t* const DARK = L"\x1b[1;38;2;255;224;138;48;2;8;8;12m";
+			Center(1, L" " + (tView.strSub.empty() ? std::wstring(L"최후의 변론") : tView.strSub) + L" ", DARK);	/* strSub = "최후의 변론   0 : 20" */
+
+			/* 찬반 중 : 오른쪽 위에 찬성 · 반대 수 */
+			if (!tView.strTally.empty())
+				tCanvas.Put(iBoxTop + 1, W - Width(tView.strTally) - 3, L" " + tView.strTally + L" ", L"\x1b[1;97;48;2;110;28;36m");
+
+			std::wstring strLabel = tSeat.strName;
+			if (tSeat.isMe) strLabel += L"(나)";
+			if (!tSeat.strIcon.empty()) strLabel += L" " + tSeat.strIcon;
+			wchar_t wszLabel[64]{};
+			static constexpr int COLOR[7][3] = { { 232, 72, 85 }, { 255, 159, 67 }, { 245, 213, 71 }, { 63, 195, 90 }, { 59, 123, 240 }, { 255, 126, 182 }, { 165, 108, 240 } };
+			swprintf_s(wszLabel, L"\x1b[1;38;2;%d;%d;%d;48;2;22;22;28m", COLOR[iSeat][0], COLOR[iSeat][1], COLOR[iSeat][2]);
+			Center(iBoxH - 1, L" " + strLabel + L" ", Intern_Color(wszLabel));
 		}
 
 		/* 대통령 면책 (찬반에서 연행 판정을 받았지만 대통령) : 어두운 무대에 조명이 켜지고 → 대통령이 연단 뒤로 올라옴 → 기자들 플래시가 터짐 */
@@ -1893,15 +2250,12 @@ namespace ConsoleUI
 	{
 		using namespace Color;
 		constexpr int AREA_W = 66, TABLE_AREA_H = 19;	// 원탁 영역 (의자 17줄 + 위 직업 1줄 + 아래 표 수 1줄)
-		constexpr int CHAIR_W = 16;						// 의자 바깥 폭 (이름 칸 14 = "★ " + 한글 6자)
-		constexpr int TABLE_COL = 18, TABLE_W = 30, TABLE_H = 9;
 
 		/* 창 크기에 맞춰 채팅 박스를 늘림 (세로 : 위 4줄 + 아래 입력 3줄 + 안내 1줄 + 여유 1줄 / 가로 : 남는 폭 전부) */
 		const int AREA_H  = (std::max)(TABLE_AREA_H, iRows - 9);
 		const int CHAT_W  = (std::max)(36, iCols - AREA_W - 7);		// 채팅 박스 안쪽 폭
 		const int TOTAL_W = AREA_W + 2 + CHAT_W + 2;
 		const int iTop    = (AREA_H - TABLE_AREA_H) / 2 + 1;			// 원탁은 세로 가운데 (1번 의자 위 직업 줄만큼 한 칸 내림)
-		const int TABLE_ROW = iTop + 4;
 
 		static const wchar_t* const ME		= L"\x1b[1;94m";	// 나 : 파랑
 		static const wchar_t* const NAME	= L"\x1b[1;97m";	// 다른 사람 : 흰색
@@ -1912,110 +2266,115 @@ namespace ConsoleUI
 		/* ---- 원탁 ---- */
 		Detail::CCanvas tCanvas(AREA_W, AREA_H);
 
-		/* 탁자 : 밤 = 남색 테두리 + 별 / 투표 = 붉은 테두리 / 그 외 = 나무 */
+		/* 탁자와 사람을 도트로 : 테두리 글자처럼 터미널 폭 차이로 깨지지 않음 */
 		const bool isNightTable = tView.isPlaying && tView.isNight;
 		const bool isVoteTable  = tView.isPlaying && tView.isVoteTable;
-		const wchar_t* const szEdge = isNightTable ? L"\x1b[34m" : (isVoteTable ? L"\x1b[31m" : WOOD);
-		tCanvas.Put(TABLE_ROW, TABLE_COL, L"╭" + std::wstring(TABLE_W - 2, L'─') + L"╮", szEdge);
-		for (int i = 1; i < TABLE_H - 1; ++i)
-		{
-			tCanvas.Put(TABLE_ROW + i, TABLE_COL, L"│", szEdge);
-			if (isNightTable)
-			{
-				tCanvas.Put(TABLE_ROW + i, TABLE_COL + 1, Spaces(TABLE_W - 2));
-				for (int c = 0; c < TABLE_W - 2; ++c)		/* 고정 무늬 별 (매번 같은 자리) */
-				{
-					const int iHash = (i * 37 + c * 11) % 29;
-					if (iHash == 0)		tCanvas.Put(TABLE_ROW + i, TABLE_COL + 1 + c, L"*", L"\x1b[1;93m");
-					else if (iHash < 3)	tCanvas.Put(TABLE_ROW + i, TABLE_COL + 1 + c, L".", L"\x1b[34m");
-				}
-			}
-			else
-				tCanvas.Put(TABLE_ROW + i, TABLE_COL + 1, std::wstring(TABLE_W - 2, L'░'), isVoteTable ? L"\x1b[2;31m" : Gray);
-			tCanvas.Put(TABLE_ROW + i, TABLE_COL + TABLE_W - 1, L"│", szEdge);
-		}
-		tCanvas.Put(TABLE_ROW + TABLE_H - 1, TABLE_COL, L"╰" + std::wstring(TABLE_W - 2, L'─') + L"╯", szEdge);
-
-		/* 탁자 가운데 글자 (앞뒤 한 칸씩 띄워 천 무늬와 붙지 않게) */
 		int iSeated{ 0 };
 		for (const SeatView& tSeat : tView.arrSeats) if (!tSeat.strName.empty()) ++iSeated;
 
-		auto Table_Text = [&](int iRow, const std::wstring& str, const wchar_t* szColor)
+		Detail::CPixels tPx(AREA_W, TABLE_AREA_H * 2);
+		auto Oval = [&](int cx, int cy, int rx, int ry, int r, int g, int b)
 		{
-			const std::wstring strPad = L" " + str + L" ";
-			tCanvas.Put(TABLE_ROW + iRow, TABLE_COL + 1 + Detail::Center_Col(strPad, TABLE_W - 2), strPad, szColor);
+			for (int j = -ry; j <= ry; ++j) for (int i = -rx; i <= rx; ++i)
+				if (i * i * ry * ry + j * j * rx * rx <= rx * rx * ry * ry) tPx.Set(cx + i, cy + j, Detail::Make_Px(r, g, b));
 		};
-		if (tView.isPlaying)
+		constexpr int TABLE_X = 33, TABLE_Y = 18;
+		Oval(TABLE_X, TABLE_Y + 1, 16, 8, 58, 36, 18);
+		Oval(TABLE_X, TABLE_Y, 16, 8, 122, 82, 48);
+		Oval(TABLE_X, TABLE_Y, 14, 7, 138, 96, 56);
+		const int iFelt[3] = { isNightTable ? 22 : (isVoteTable ? 110 : 36), isNightTable ? 34 : (isVoteTable ? 28 : 90), isNightTable ? 84 : (isVoteTable ? 36 : 64) };
+		Oval(TABLE_X, TABLE_Y, 12, 6, iFelt[0], iFelt[1], iFelt[2]);
+
+		/* 게임 중 탁자 가운데 : "아침   0 : 20" → 큰 도트 시계 (10초 미만이면 빨강) */
+		std::wstring strClock;
+		if (tView.isPlaying && tView.strTableWait.empty())
 		{
-			const int iShift = tView.strTally.empty() ? 0 : -1;		// 셋째 줄이 있으면 한 줄씩 위로 (2 · 4 · 6)
-			Table_Text(3 + iShift, (tView.isNight ? L"밤" : L"낮") + std::wstring(L"  ·  ") + std::to_wstring(tView.iDay) + L"일차", tView.isNight ? NIGHT : DAY);
-			if (!tView.strSub.empty())		Table_Text(5 + iShift, tView.strSub, NAME);
-			if (!tView.strTally.empty())	Table_Text(6, tView.strTally, Yellow);
-		}
-		else
-		{
-			Table_Text(3, L"대 기 중", NAME);
-			Table_Text(5, std::to_wstring(iSeated) + L" / 7", Gray);
+			const size_t iGap = tView.strSub.rfind(L"   ");
+			for (wchar_t ch : tView.strSub.substr(iGap == std::wstring::npos ? 0 : iGap + 3)) if (ch != L' ') strClock += ch;
+
+			static const wchar_t* const DIGIT[11][5] = {
+				{ L"###", L"#.#", L"#.#", L"#.#", L"###" }, { L".#.", L"##.", L".#.", L".#.", L"###" }, { L"###", L"..#", L"###", L"#..", L"###" }, { L"###", L"..#", L"###", L"..#", L"###" },
+				{ L"#.#", L"#.#", L"###", L"..#", L"..#" }, { L"###", L"#..", L"###", L"..#", L"###" }, { L"###", L"#..", L"###", L"#.#", L"###" }, { L"###", L"..#", L".#.", L".#.", L".#." },
+				{ L"###", L"#.#", L"###", L"#.#", L"###" }, { L"###", L"#.#", L"###", L"..#", L"###" }, { L".", L"#", L".", L"#", L"." } };
+			const bool isUrgent = strClock.rfind(L"0:0", 0) == 0;
+			const Detail::Px tDigit = isUrgent ? Detail::Make_Px(255, 90, 90) : Detail::Make_Px(255, 224, 138);
+			int iClockW = -1;
+			for (wchar_t ch : strClock) iClockW += (ch == L':' ? 1 : 3) + 1;
+			int iX = TABLE_X - iClockW / 2;
+			for (wchar_t ch : strClock)
+			{
+				if (ch != L':' && (ch < L'0' || ch > L'9')) continue;
+				const wchar_t* const* pRows = DIGIT[ch == L':' ? 10 : ch - L'0'];
+				for (int y = 0; y < 5; ++y)
+					for (int x = 0; pRows[y][x]; ++x)
+						if (pRows[y][x] == L'#') tPx.Set(iX + x, 17 + y, tDigit);
+				iX += (ch == L':' ? 1 : 3) + 1;
+			}
 		}
 
-		/* 의자 7개 : 1번 맨 위부터 시계 방향 (행, 열) */
-		static constexpr int SEAT_POS[7][2] = { { 0, 25 }, { 3, 50 }, { 10, 50 }, { 14, 34 }, { 14, 16 }, { 10, 0 }, { 3, 0 } };
+		/* 사람 7명 : 1번 맨 위부터 시계 방향 (픽셀 x, y) */
+		static constexpr int SEAT_POS[7][2] = { { 28, 0 }, { 50, 4 }, { 50, 16 }, { 39, 27 }, { 17, 27 }, { 6, 16 }, { 6, 4 } };
 		for (int i = 0; i < 7; ++i)
 		{
 			const SeatView& tSeat = tView.arrSeats[i];
-			const int iRow = iTop + SEAT_POS[i][0], iCol = SEAT_POS[i][1];
-			const std::wstring strNo = std::to_wstring(i + 1);
+			const int iArt = tSeat.strName.empty() ? 0 : static_cast<int>(tSeat.eArt);
+			const bool isTall = (tSeat.eArt == SEAT_ART::MEDIUM);		/* 구슬 때문에 조금 큼 */
+			const int ox = SEAT_POS[i][0] - (isTall ? 1 : 0), oy = SEAT_POS[i][1] - (isTall ? 1 : 0);
+			const bool isGray = tSeat.isDead || tSeat.strName.empty();
+			for (int y = 0; y < 9 && Detail::SEAT_SPRITE[iArt][y]; ++y)
+				for (int x = 0; Detail::SEAT_SPRITE[iArt][y][x]; ++x)
+					if (Detail::SEAT_SPRITE[iArt][y][x] != L'.') tPx.Set(ox + x, oy + y, Detail::Seat_Pal(Detail::SEAT_SPRITE[iArt][y][x], i, isGray));
+		}
+		tPx.Flush(tCanvas, iTop - 1, 0);
 
-			if (tSeat.strName.empty())
-			{
-				/* 빈자리 : 점선 의자 */
-				tCanvas.Put(iRow,     iCol, L"┌" + strNo + std::wstring(CHAIR_W - 3, L'┄') + L"┐", Gray);
-				tCanvas.Put(iRow + 1, iCol, L"┆" + Spaces(CHAIR_W - 2) + L"┆", Gray);
-				tCanvas.Put(iRow + 2, iCol, L"└" + std::wstring(CHAIR_W - 2, L'┄') + L"┘", Gray);
-				continue;
-			}
+		/* 탁자 가운데 글자 : 천 색 바탕 */
+		wchar_t wszFelt[64]{};
+		swprintf_s(wszFelt, L"\x1b[1;97;48;2;%d;%d;%dm", iFelt[0], iFelt[1], iFelt[2]);
+		const wchar_t* const szFelt = Detail::Intern_Color(wszFelt);
+		auto Table_Text = [&](int iRow, const std::wstring& str) { tCanvas.Put(iTop - 1 + iRow, TABLE_X - Width(str) / 2, str, szFelt); };
+		if (tView.isPlaying)
+		{
+			Table_Text(7, (tView.isNight ? L"밤 " : L"낮 ") + std::to_wstring(tView.iDay) + L"일차");		/* 위 : 일차 / 가운데 : 도트 시계 */
+			if (!tView.strTableWait.empty()) Table_Text(9, tView.strTableWait);
+		}
+		else
+		{
+			Table_Text(8, L"대 기 중");
+			Table_Text(9, std::to_wstring(iSeated) + L" / 7");
+		}
 
-			const bool isPick = tView.isVoting && tView.iVoteSel == i;		// 투표로 고른 의자 : 빨간 이중 테두리
-			const wchar_t* szName = tSeat.isDead ? Gray : (tSeat.isMe ? ME : NAME);
-			static const wchar_t* const PICK[3] = { L"\x1b[1;91m", L"\x1b[1;92m", L"\x1b[1;96m" };	// 고른 의자 : 빨강 / 초록 / 하늘
-			const wchar_t* szLine = isPick ? PICK[std::clamp(tView.iPickColor, 0, 2)]
-								  : (tSeat.isDead ? Gray : (tSeat.isMe ? ME : (isNightTable ? L"\x1b[34m" : L"\x1b[37m")));	// 밤 : 다른 의자는 어둡게
-			const wchar_t  H = isPick ? L'═' : L'─', V = isPick ? L'║' : L'│';
-			const bool isSkull = tSeat.isDead;								// 죽으면 ★ 대신 ☠
-			const bool isMark = isSkull || tSeat.isMaster;
-			const std::wstring strName = (isMark ? L"★ " : L"") + tSeat.strName;	// 표시 기호(★ / ☠)는 터미널에서 1칸보다 넓게 그려져 뒤에 한 칸 띄움
-			const std::wstring strFit = Fit(strName, CHAIR_W - 2);			// 길면 자름
-			const int iNameW = (std::min)(Width(strName), CHAIR_W - 2);
+		/* 이름 : 사람 아래, 자리 색 (나 = 흰색 + "(나)"). 받은 표 · 사망 · 무고 표시도 옆에 */
+		for (int i = 0; i < 7; ++i)
+		{
+			const SeatView& tSeat = tView.arrSeats[i];
+			const bool isEmpty = tSeat.strName.empty();
+			std::wstring strLabel = isEmpty ? std::to_wstring(i + 1) + L"번" : tSeat.strName;
+			if (tSeat.isMaster) strLabel = L"★ " + strLabel;
+			if (tSeat.isMe) strLabel += L"(나)";
+			if (!tSeat.strIcon.empty()) strLabel += L" " + tSeat.strIcon;		/* 내 직업 · 알아낸 직업 */
+			if (tSeat.isDead) strLabel += L" ☠ ";
+			if (tSeat.iVotes > 0) strLabel += L" " + std::to_wstring(tSeat.iVotes) + L"표";
 
-			tCanvas.Put(iRow, iCol, isPick ? L"╔" : L"┌", szLine);
-			tCanvas.Put(iRow, iCol + 1, strNo, isPick ? szLine : Gray);
-			tCanvas.Put(iRow, iCol + 2, std::wstring(CHAIR_W - 3, H) + (isPick ? L"╗" : L"┐"), szLine);
-
-			tCanvas.Put(iRow + 1, iCol, V + Spaces(CHAIR_W - 2) + V, szLine);
-			const int iNameCol = iCol + 1 + (CHAIR_W - 2 - iNameW) / 2;
-			if (isMark)
-			{
-				tCanvas.Put(iRow + 1, iNameCol, isSkull ? L"☠" : L"★", isSkull ? szName : Yellow);
-				tCanvas.Put(iRow + 1, iNameCol + (isSkull ? 3 : 2), strFit.substr(2, strFit.find_last_not_of(L' ') - 1), szName);
-			}
-			else
-				tCanvas.Put(iRow + 1, iNameCol, strFit.substr(0, strFit.find_last_not_of(L' ') + 1), szName);
-
-			tCanvas.Put(iRow + 2, iCol, (isPick ? L"╚" : L"└") + std::wstring(CHAIR_W - 2, H) + (isPick ? L"╝" : L"┘"), szLine);
-
-			/* 의자 위 : 직업 / 의자 아래 : 투표 : N 표 (둘 다 의자 폭 가운데) */
-			if (!tSeat.strRole.empty())
-				tCanvas.Put(iRow - 1, iCol + Detail::Center_Col(tSeat.strRole, CHAIR_W), tSeat.strRole, tSeat.isDead ? Gray : (tSeat.isRoleRed ? L"\x1b[1;91m" : L"\x1b[1;92m"));
-			if (tSeat.iVotes >= 0)
-			{
-				const std::wstring strVotes = L"투표 : " + std::to_wstring(tSeat.iVotes) + L" 표";
-				tCanvas.Put(iRow + 3, iCol + Detail::Center_Col(strVotes, CHAIR_W), strVotes, tSeat.iVotes > 0 ? Yellow : Gray);
-			}
+			const bool isPick = tView.isVoting && tView.iVoteSel == i;
+			const int iW  = Width(strLabel);
+			const int iCx = SEAT_POS[i][0] + 4;
+			const int iCol = std::clamp(iCx - iW / 2, 0, AREA_W - iW);
+			const int iRow = iTop - 1 + (SEAT_POS[i][1] + 9) / 2;
+			tCanvas.Put(iRow, iCol, strLabel, isEmpty || tSeat.isDead ? Gray : (isPick ? L"\x1b[1;97;41m" : (tSeat.isMe ? L"\x1b[1;97m" : Detail::Seat_Color(i))));
 		}
 
 		/* 밤 : 원탁 대신 목록 */
 		if (tView.isPlaying && tView.isSeatList)
-			Detail::Draw_SeatList(tCanvas, iTop - 1, 0, AREA_W, TABLE_AREA_H, tView);
+		{
+			if (tView.isSceneView && tView.eNightScene != RoomScreenView::NIGHT_SCENE::NONE)
+				Detail::Draw_NightSkill(tCanvas, iTop - 1, 0, AREA_W, TABLE_AREA_H, tView);
+			else
+				Detail::Draw_SeatList(tCanvas, iTop - 1, 0, AREA_W, TABLE_AREA_H, tView);
+		}
+
+		/* 최후 변론 : 탁자 없이 지목된 사람만 */
+		if (tView.isPlaying && tView.iSpotSeat >= 0)
+			Detail::Draw_Allocution(tCanvas, iTop - 1, AREA_W, TABLE_AREA_H, tView);
 
 		/* 처형 연출 : 원탁 위를 통째로 덮음 */
 		if (tView.iExecFrame >= 0)
@@ -2053,12 +2412,12 @@ namespace ConsoleUI
 			}
 			else
 			{
-				const std::wstring strName = Fit(iter->strName, Width(iter->strName));
+				const std::wstring strName = iter->strName + iter->strIcon;
 				const int iIndent = Width(strName) + 2;
 				const std::vector<std::wstring> vecParts = Detail::Wrap(iter->strText, TEXT_W - iIndent, TEXT_W - iIndent);
 				for (size_t i = 0; i < vecParts.size(); ++i)
 				{
-					const std::wstring strHead = (i == 0) ? std::wstring(iter->isMe ? ME : Yellow) + strName + Reset + L"  " : Spaces(iIndent);
+					const std::wstring strHead = (i == 0) ? std::wstring(iter->iSeat >= 0 ? Detail::Seat_Color(iter->iSeat) : (iter->isMe ? ME : Yellow)) + strName + Reset + L"  " : Spaces(iIndent);
 					vecMsg.push_back(strHead + Fit(vecParts[i], TEXT_W - iIndent));
 				}
 			}
@@ -2117,14 +2476,14 @@ namespace ConsoleUI
 				strTarget = strNo + (tView.arrSeats[tView.iVoteSel].strName == strNo ? L"" : L"  " + tView.arrSeats[tView.iVoteSel].strName);
 			}
 
-			const std::wstring strLabel = tView.isVoteDone ? tView.strPickVerb + L" 완료" : L"▸ " + tView.strPickVerb;
+			const std::wstring strLabel = tView.isVoteDone ? (tView.strDoneLabel.empty() ? tView.strPickVerb + L" 완료" : tView.strDoneLabel) : L"▸ " + tView.strPickVerb;
 			const std::wstring strBox   = strTarget.empty() ? L"" : L"  " + strTarget + L"  ";
 			const std::wstring strTail  = tView.isVoteDone  ? L"   다음 단계까지 기다려 주세요"
 										: strTarget.empty() ? (tView.isPickAbstain ? L"자리 번호를 눌러 고르세요   ( 0 = 무효표 )" : L"자리 번호를 눌러 고르세요")
 										:                     (tView.isSeatList ? L"   ↑↓ 로 바꾸고  Enter 를 누르면 " : L"   ←→ 로 바꾸고  Enter 를 누르면 ") + tView.strPickVerb + L"합니다";
 
-			str += L" "; str += tView.isVoteDone ? Green : Yellow; str += Bold; str += strLabel; str += Reset; str += L"   ";
-			if (!strBox.empty()) { str += tView.isVoteDone ? L"\x1b[1;30;42m" : L"\x1b[1;97;41m"; str += strBox; str += Reset; }
+			str += L" "; str += tView.isDoneFail ? Red : (tView.isVoteDone ? Green : Yellow); str += Bold; str += strLabel; str += Reset; str += L"   ";
+			if (!strBox.empty()) { str += (tView.isVoteDone && !tView.isDoneFail) ? L"\x1b[1;30;42m" : L"\x1b[1;97;41m"; str += strBox; str += Reset; }
 			str += Gray; str += strTail; str += Reset;
 			str += Spaces((std::max)(0, INPUT_W - 1 - (1 + Width(strLabel) + 3 + Width(strBox) + Width(strTail))));
 		}

@@ -239,6 +239,22 @@ namespace MafiaServer
 		return true;
 	}
 
+	bool CMafiaLogic::Adjust_Time(INT32 iSeat, bool isAdd, ULONGLONG ullNow)
+	{
+		if (m_eCurPhase != Protocol::GAME_PHASE::DAY) return false;
+		if (!Check_SeatRange(iSeat)) return false;
+		if (m_arraySeatInfo[iSeat]->isAlive == false) return false;
+		if (m_arraySeatInfo[iSeat]->isUseTime) return false;
+
+		const ULONGLONG ullRemain = Get_Remain(ullNow);
+		if (!isAdd && ullRemain < Protocol::TIME_SKIP_MIN_MS) return false;		/* 곧 끝나면 스킵 거부 (늦게 도착한 요청도) */
+
+		m_arraySeatInfo[iSeat]->isUseTime = true;
+		if (isAdd)	m_iCurStateLen += Protocol::TIME_ADJUST_MS;
+		else		m_iCurStateLen = (ullNow - m_iCurStateTime) + (std::max<ULONGLONG>)(ullRemain > Protocol::TIME_ADJUST_MS ? ullRemain - Protocol::TIME_ADJUST_MS : 0, Protocol::TIME_SKIP_MIN_MS);	/* 스킵해도 10초는 남김 */
+		return true;
+	}
+
 	bool CMafiaLogic::LastVote(INT32 iVoter, bool isAgree)
 	{
 		if (m_eCurPhase != Protocol::GAME_PHASE::LAST_VOTE) return false;
@@ -395,6 +411,8 @@ namespace MafiaServer
 			tResult.tTarget.iSeat = iTargetSeat;
 			tResult.isContact = tBetrayerAction.isContact;
 
+			pMe->isUsePhaseAbility = true;	/* 하루에 직업 확인 · 접선 중 하나만 */
+
 			/* 직업확인 */
 			if (!tBetrayerAction.isContact)
 			{
@@ -405,7 +423,6 @@ namespace MafiaServer
 			/* 마피아 컨택트일 경우 */
 			else
 			{
-				pMe->isUsePhaseAbility = true;
 				tResult.isSucceeded   = Is_Mafia(iTargetSeat);					/* 접촉 : 대상이 마피아면 성공 */
 				tResult.tTarget.iSeat = tBetrayerAction.tTarget.iSeat;			/* 마피아 자리 넣어주기 */
 
@@ -430,6 +447,8 @@ namespace MafiaServer
 		default:
 			return L"능력이 없는 직업";
 		}
+
+		return nullptr;
 	}
 
 	void CMafiaLogic::Change_Phase(ULONGLONG ullNow)
@@ -520,7 +539,7 @@ namespace MafiaServer
 	{
 		m_eCurPhase = ePhase;
 		m_iCurStateTime = ullNow;								/* 이 State가 시작된 시각 */
-		if (m_eCurPhase == Protocol::GAME_PHASE::LOADING_DAY) ++m_iDay;	/* 동틀 때마다 하루 (아침 로딩 화면부터 새 일차) */
+		if (m_eCurPhase == Protocol::GAME_PHASE::LOADING_NIGHT) ++m_iDay;	/* 해가 질 때 하루 : 0일차 밤 → 0일차 낮 → 1일차 밤 */
 		/* 새 투표 · 새 찬반 : 기록 지우기 */
 		if (m_eCurPhase == Protocol::GAME_PHASE::VOTE || m_eCurPhase == Protocol::GAME_PHASE::LAST_VOTE)
 			for (Seat_Info* pSeat : m_arraySeatInfo)
@@ -534,26 +553,28 @@ namespace MafiaServer
 			m_tUseSkillData.Reset();
 			for (Seat_Info* pSeat : m_arraySeatInfo)
 				if (pSeat) pSeat->isUsePhaseAbility = false;
-			m_iCurStateLen = 30'000;  /* 30초 */
+			m_iCurStateLen = 40'000;  /* 30초 */
 			break;
 		case Protocol::GAME_PHASE::LOADING_DAY:
 			m_iCurStateLen = m_isFxNext ? 10'000 : 5'000;	/* 밤 습격 연출이 있으면 10초 (연출 뒤 여유), 없으면 5초 */
 			m_isFxNext = false;
 			break;
 		case Protocol::GAME_PHASE::DAY:
-			m_iCurStateLen = 30'000; /* 30초 */
+			for (Seat_Info* pSeat : m_arraySeatInfo)
+				if (pSeat) pSeat->isUseTime = false;
+			m_iCurStateLen = 90'000; /* 60초 */
 			break;
 		case Protocol::GAME_PHASE::VOTE:
 			m_iAccusedSeat = -1;
 			m_iExecutedSeat = -1;
 			m_isPresidentSaved = false;
-			m_iCurStateLen = 15'000; /* 15초 */
+			m_iCurStateLen = 20'000; /* 15초 */
 			break;
 		case Protocol::GAME_PHASE::ALLOCUTION:
-			m_iCurStateLen = 15'000; /* 15초 */
+			m_iCurStateLen = 20'000; /* 15초 */
 			break;
 		case Protocol::GAME_PHASE::LAST_VOTE:
-			m_iCurStateLen = 10'000; /* 10초 */
+			m_iCurStateLen = 15'000; /* 10초 */
 			break;
 		case Protocol::GAME_PHASE::LOADING_NIGHT:
 			m_iCurStateLen = m_isFxNext ? 10'000 : 5'000;	/* 연행 · 면책 연출이 있으면 10초, 없으면 5초 */

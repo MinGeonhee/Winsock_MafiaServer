@@ -46,12 +46,15 @@ namespace MafiaClient
 		std::vector<int> Vote_Candidates() const;				/* 투표 후보 : 살아 있는 사람 중 나 빼고 (시계 방향) + 마지막에 무효표 */
 		bool	Key_Pick(const KEY_EVENT_RECORD& tKey, const std::vector<int>& vecCand);	/* 막대 고르기 공용 (←→ · 숫자) : Enter로 확정하면 true */
 
-		/* 밤 능력 : 고르기 · 보내기만 (판정은 서버). [Tab] 으로 모드 바꿈 (마피아 : 처치 ↔ 채팅) */
-		enum class NIGHT_MODE { KILL, SNOOP, GUARD, MEDIUM, FIND_JOB, CONTACT, NOTICE, CHAT };
+		/* 밤 능력 : 고르기 · 보내기만 (판정은 서버). [Tab] 으로 능력 화면 ↔ 원탁 · 채팅 */
+		enum class NIGHT_MODE { NONE, KILL, SNOOP, GUARD, MEDIUM, FIND_JOB, CONTACT, NOTICE, CHAT };
 		std::vector<NIGHT_MODE> Night_Modes() const;			/* 지금 쓸 수 있는 모드 (직업 · 이번 밤 사용 여부) */
 		std::vector<int>		Night_Candidates() const;		/* 지금 모드로 고를 수 있는 자리 */
 		void	Key_Night(const KEY_EVENT_RECORD& tKey);
 		void	Apply_NightMode(NIGHT_MODE eMode);				/* 막대 / 입력 줄 / 안내 바꾸기 */
+		void	Show_SkillView();								/* 능력 화면 : 쓸 수 있는 첫 능력, 없으면 장면 + 안내 */
+		void	Toggle_NightView();								/* [Tab] 능력 화면 ↔ 원탁 · 채팅 */
+		ConsoleUI::RoomScreenView::NIGHT_SCENE Night_Scene() const;	/* 내 직업의 밤 장면 (죽었거나 밤 능력이 없으면 NONE) */
 		void	Send_Skill();									/* 고른 자리로 C_TO_S_JOB_ACTION */
 		void	On_JobData(const Net::Event& tEvent, Protocol::DATA_TYPE eType);	/* 능력 결과 · 대통령 공지 */
 		void	Know_Job(int iSeat, Protocol::JOB eJob);		/* 알아낸 직업 → 의자 위 */
@@ -99,10 +102,14 @@ namespace MafiaClient
 		int							m_iAgree{ 0 };			/* 찬반 중계로 센 찬성 (탁자 표시용) */
 		int							m_iDisagree{ 0 };
 		bool						m_isLastVoteDone{ false };	/* 찬반은 한 번만 */
+		bool						m_isTimeUsed{ false };		/* 오늘 낮 시간 스킵 · 추가 (서버도 막음) */
+		void						Update_TimeHelp();			/* 낮 안내 : 남은 시간 10초 미만이면 [F1] 스킵을 숨김 */
 
 		/* 밤 능력 (서버도 같은 규칙으로 막음 : 여기선 화면 · 입력만) */
 		NIGHT_MODE					m_eNightMode{ NIGHT_MODE::CHAT };
 		bool						m_isSkillDone{ false };		/* 이번 밤 능력 씀 (밤마다 초기화) */
+		int							m_iDoneSeat{ -1 };			/* 이번 밤 고른 자리 (화면을 오가도 표시) */
+		ULONGLONG					m_ullSceneStart{ 0 };		/* 장면 애니메이션 시작 시각 */
 		bool						m_isFindJobUsed{ false };	/* 배신자 직업 확인 (게임 중 1회) */
 		bool						m_isContacted{ false };		/* 배신자 ↔ 마피아 접선 (게임 내내) */
 		std::array<Protocol::JOB, Protocol::MAX_ROOM_PLAYER>	m_arrKnownJob{};	/* 능력으로 알아낸 남의 직업 (UNKNOWN = 모름) */

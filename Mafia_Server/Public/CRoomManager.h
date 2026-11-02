@@ -36,6 +36,7 @@ namespace MafiaServer
 		const wchar_t*		Chatting(Protocol::ROOM_KEY iRoomKey, const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText, Net::CServer* pMainServer);
 		const wchar_t*		Vote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, INT32 iSeat);
 		const wchar_t*		LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is);
+		const wchar_t*		Adjust_Time(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iKey, bool isAdd, ULONGLONG ullNow);
 		const wchar_t*		Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction);	/* 방 키는 tAction.iRoomKey */
 
 		/* 게임 시작 승인된 방 : 로딩(카운트다운) 시작 */

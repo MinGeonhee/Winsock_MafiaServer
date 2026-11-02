@@ -76,6 +76,7 @@ namespace MafiaServer
 		/* 투표 : 보낸 사람 자리를 찾아 로직에 넘김 (iSeat = NONE_SEAT 이면 무효표) */
 		const wchar_t*	Vote(Net::ClientKey iVoterKey, INT32 iSeat);
 		const wchar_t*	LastVote(Net::ClientKey iVoterKey, bool is);
+		const wchar_t*	Adjust_Time(Net::ClientKey iKey, bool isAdd, ULONGLONG ullNow);
 		const wchar_t*	Use_Skill(Net::ClientKey iUserKey, const Protocol::JOB_ACTION& tAction);	/* 보낸 사람 자리를 찾아 로직에 넘김 */
 
 		/* 방안의 모든 사람에게 패킷보내기 */

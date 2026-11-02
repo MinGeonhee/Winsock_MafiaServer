@@ -17,6 +17,8 @@ namespace Protocol
 	constexpr size_t   MAX_ROOMNAME_BUF = 32;
 	constexpr uint16_t MAX_ROOM_PLAYER	= 7;
 	constexpr uint16_t MIN_START_PLAYER	= 5;		// 게임 시작 최소 인원 (직업 덱 5인 기본)
+	constexpr uint32_t TIME_ADJUST_MS = 15000;		// 낮 시간 스킵 · 추가 한 번에 줄고 느는 시간 (한 사람 하루 1번)
+	constexpr uint32_t TIME_SKIP_MIN_MS = 10000;	// 남은 시간이 이보다 적으면 스킵 불가, 스킵해도 이만큼은 남김
 	constexpr uint32_t START_COUNTDOWN_MS = 5000;	// 시작 승인 후 실제 게임까지 (서버 판정 · 클라 표시 공용)
 
 	constexpr uint16_t MAX_ROOM_PACKET_COUNT = 10;
@@ -110,6 +112,7 @@ namespace Protocol
 		S_TO_C_GAME_END,					// 서버->클라 게임 끝 (이긴 팀 + 자리별 직업) → 방 전원
 		C_TO_S_JOB_ACTION,					// 클라->서버 직업 능력 (본문 = JOB_ACTION 머리 + 직업별 구조체)
 		S_TO_C_NIGHT_RESULT,				// 서버->클라 밤 결과 (죽은 자리) → 방 전원
+		C_TO_S_ADJUST_TIME,					// 클라->서버 낮 시간 스킵 · 추가
 		END
 	};
 
@@ -124,6 +127,7 @@ namespace Protocol
 		MEDIUM_RESULT,			// 영매 결과 (본인만)
 		BETRAYER_RESULT,		// 배신자 확인 · 접촉 결과 (본인만)
 		PRESIDENT_NOTICE,		// 대통령 공지 (방 전원)
+		GAME_TIME,				// 낮 시간 스킵 · 추가 (방 전원)
 		END
 	};
 

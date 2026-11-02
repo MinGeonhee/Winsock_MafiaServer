@@ -85,6 +85,13 @@ namespace MafiaServer
 		return iter->second->Vote(iVoterKey, iSeat);
 	}
 
+	const wchar_t* CRoomManager::Adjust_Time(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iKey, bool isAdd, ULONGLONG ullNow)
+	{
+		auto iter = m_umapRooms.find(iRoomKey);
+		if (iter == m_umapRooms.end()) return L"없는 방";
+		return iter->second->Adjust_Time(iKey, isAdd, ullNow);
+	}
+
 	const wchar_t* CRoomManager::LastVote(Protocol::ROOM_KEY iRoomKey, Net::ClientKey iVoterKey, bool is)
 	{
 		auto iter = m_umapRooms.find(iRoomKey);

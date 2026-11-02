@@ -2,6 +2,7 @@
 #include "CScene_Room.h"
 #include "CClientApp.h"
 #include "ConsoleUI.h"
+#include "Sfx.h"
 
 
 namespace MafiaClient
@@ -43,6 +44,28 @@ namespace MafiaClient
 		}
 
 		/* 빨간 글씨 = 마피아 팀 */
+		ConsoleUI::SEAT_ART Job_Art(Protocol::JOB eJob)
+		{
+			switch (eJob)
+			{
+			case Protocol::JOB::MAFIA:		return ConsoleUI::SEAT_ART::MAFIA;
+			case Protocol::JOB::PRESIDENT:	return ConsoleUI::SEAT_ART::PRESIDENT;
+			case Protocol::JOB::SNOOP:		return ConsoleUI::SEAT_ART::SNOOP;
+			case Protocol::JOB::BODYGUARD:	return ConsoleUI::SEAT_ART::BODYGUARD;
+			case Protocol::JOB::MEDIUM:		return ConsoleUI::SEAT_ART::MEDIUM;
+			case Protocol::JOB::SOLDIER:	return ConsoleUI::SEAT_ART::SOLDIER;
+			case Protocol::JOB::BETRAYER:	return ConsoleUI::SEAT_ART::BETRAYER;
+			default:						return ConsoleUI::SEAT_ART::CITIZEN;
+			}
+		}
+
+		/* "🔪 마피아" → "🔪" */
+		std::wstring Job_Icon(Protocol::JOB eJob)
+		{
+			const std::wstring strRole = Job_Role(eJob);
+			return strRole.substr(0, strRole.find(L' '));
+		}
+
 		bool Is_RedJob(Protocol::JOB eJob) { return eJob == Protocol::JOB::MAFIA || eJob == Protocol::JOB::BETRAYER; }
 
 		/* 직업 설명 (게임 시작 때 채팅에 한 줄) */
@@ -163,6 +186,21 @@ namespace MafiaClient
 		/* 게임 중엔 못 나감. 단계별로 받는 키가 다름 */
 		for (const KEY_EVENT_RECORD& tKey : vecKeys)
 		{
+			/* 낮 : F1 시간 스킵 / F2 시간 추가 (하루 1번, 판정은 서버) */
+			if (m_ePhase == Protocol::GAME_PHASE::DAY && (tKey.wVirtualKeyCode == VK_F1 || tKey.wVirtualKeyCode == VK_F2))
+			{
+				if (m_isTimeUsed || !Is_Alive(m_iMySeat)) continue;
+				const ULONGLONG ullNow = GetTickCount64();
+				const bool isSkipLocked = ullNow + Protocol::TIME_SKIP_MIN_MS > m_ullPhaseEnd;
+				if (tKey.wVirtualKeyCode == VK_F1 && isSkipLocked) continue;	/* 곧 끝남 : 스킵 불가 (서버도 막음) */
+				m_isTimeUsed = true;
+				Protocol::C_TO_S_ADJUST_TIME tBody{};
+				tBody.iRoomKey	= m_tRoomInfo.iRoomKey;
+				tBody.isAdd		= (tKey.wVirtualKeyCode == VK_F2);
+				m_pClientApp->Get_Client()->Send_Packet(static_cast<uint16_t>(Protocol::PACKET_TYPE::C_TO_S_ADJUST_TIME), tBody);
+				Update_TimeHelp();
+				continue;
+			}
 			switch (m_ePhase)
 			{
 			case Protocol::GAME_PHASE::VOTE:		Key_Vote(tKey);		break;		/* 1 ~ 7만 (채팅 X) */
@@ -250,6 +288,7 @@ namespace MafiaClient
 			const auto iter = std::find(vecCand.begin(), vecCand.end(), m_tView.iVoteSel);
 			int iIdx = (iter == vecCand.end()) ? 0 : static_cast<int>(iter - vecCand.begin());
 			iIdx = (iIdx + ((wVK == VK_RIGHT || wVK == VK_DOWN) ? 1 : iCount - 1)) % iCount;
+			if (m_tView.iVoteSel != vecCand[iIdx]) Sfx::Play(Sfx::ID::MOVE);
 			m_tView.iVoteSel = vecCand[iIdx];
 			m_isDirty = true;
 			return false;
@@ -270,6 +309,7 @@ namespace MafiaClient
 				else											Show_Notice(L"고를 수 없는 자리입니다");
 				return false;
 			}
+			if (m_tView.iVoteSel != iSeat) Sfx::Play(Sfx::ID::MOVE);
 			m_tView.iVoteSel = iSeat;
 		}
 		else return false;
@@ -289,9 +329,9 @@ namespace MafiaClient
 		case Protocol::JOB::BODYGUARD:	if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::GUARD);	break;
 		case Protocol::JOB::MEDIUM:		if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::MEDIUM);	break;
 		case Protocol::JOB::PRESIDENT:	if (!m_isSkillDone) vecModes.push_back(NIGHT_MODE::NOTICE);	break;
-		case Protocol::JOB::BETRAYER:	/* 직업 확인(게임 중 1회)과 접선(밤마다)은 따로 : 같은 밤에 둘 다 가능 */
-			if (!m_isFindJobUsed)					vecModes.push_back(NIGHT_MODE::FIND_JOB);
-			if (!m_isContacted && !m_isSkillDone)	vecModes.push_back(NIGHT_MODE::CONTACT);
+		case Protocol::JOB::BETRAYER:	/* 하루에 직업 확인(게임 중 1회) · 접선(성공할 때까지 밤마다) 중 하나만 */
+			if (!m_isSkillDone && !m_isFindJobUsed)	vecModes.push_back(NIGHT_MODE::FIND_JOB);
+			if (!m_isSkillDone && !m_isContacted)	vecModes.push_back(NIGHT_MODE::CONTACT);
 			if (m_isContacted)						vecModes.push_back(NIGHT_MODE::CHAT);
 			break;
 		default: break;		/* 군인 · 시민 : 밤에 할 일 없음 */
@@ -323,20 +363,25 @@ namespace MafiaClient
 	{
 		if (!Is_Alive(m_iMySeat)) return;
 
-		/* Tab : 다음 모드 (지금 모드가 끝나서 목록에 없으면 첫 모드로) */
+		/* Tab : 능력 화면 ↔ 원탁 · 채팅 */
 		if (tKey.wVirtualKeyCode == VK_TAB)
 		{
-			const std::vector<NIGHT_MODE> vecModes = Night_Modes();
-			if (vecModes.empty()) return;
-			const auto iter = std::find(vecModes.begin(), vecModes.end(), m_eNightMode);
-			if (iter != vecModes.end() && vecModes.size() == 1) return;
-			const size_t iNext = (iter == vecModes.end()) ? 0 : (static_cast<size_t>(iter - vecModes.begin()) + 1) % vecModes.size();
-			Apply_NightMode(vecModes[iNext]);
+			Toggle_NightView();
+			return;
+		}
+
+		/* 배신자 ←→ : 직업 탐색 ↔ 접선 (↑↓는 대상 고르기) */
+		if ((m_eNightMode == NIGHT_MODE::FIND_JOB || m_eNightMode == NIGHT_MODE::CONTACT) && (tKey.wVirtualKeyCode == VK_LEFT || tKey.wVirtualKeyCode == VK_RIGHT))
+		{
+			if (m_eNightMode == NIGHT_MODE::FIND_JOB && !m_isSkillDone && !m_isContacted)		Apply_NightMode(NIGHT_MODE::CONTACT);
+			else if (m_eNightMode == NIGHT_MODE::CONTACT && !m_isSkillDone && !m_isFindJobUsed)	Apply_NightMode(NIGHT_MODE::FIND_JOB);
 			return;
 		}
 
 		switch (m_eNightMode)
 		{
+		case NIGHT_MODE::NONE:
+			break;
 		case NIGHT_MODE::CHAT:
 			Edit_Chat(tKey);
 			break;
@@ -396,15 +441,16 @@ namespace MafiaClient
 		for (int iSeat : vecCand) m_tView.iPickMask |= static_cast<uint8_t>(1u << iSeat);	/* 목록에서 고를 수 있는 줄 */
 		m_tView.strInputLabel	= (eMode == NIGHT_MODE::NOTICE) ? L"공지 ▸ " : L"▸ ";
 		m_tView.strInputLock	= isPick ? L"능력을 쓰는 중입니다" : L"";		/* 막대가 대신 그려짐 */
+		m_tView.iSkillTab		= (eMode == NIGHT_MODE::FIND_JOB) ? 1 : (eMode == NIGHT_MODE::CONTACT) ? 2 : 0;
 
-		/* 안내 : [Tab] (모드가 둘 이상) + 모드별 조작 */
-		std::wstring strHelp = (Night_Modes().size() > 1) ? L"[Tab] 모드 바꾸기   " : L"";
+		/* 안내 : [Tab] + 모드별 조작 */
+		std::wstring strHelp = m_tView.isSceneView ? L"[Tab] 원탁 · 채팅 보기   " : L"[Tab] 능력 화면   ";
 		switch (eMode)
 		{
 		case NIGHT_MODE::CHAT:		strHelp += L"밤 채팅은 마피아 편끼리만 보입니다";				break;
 		case NIGHT_MODE::NOTICE:	strHelp += L"공지를 쓰고 [Enter] → 방 전원에게 보입니다";		break;
-		case NIGHT_MODE::FIND_JOB:	strHelp += L"(게임 중 한 번) 직업 확인   ";						[[fallthrough]];
 		default:
+			if ((eMode == NIGHT_MODE::FIND_JOB || eMode == NIGHT_MODE::CONTACT) && !m_isFindJobUsed && !m_isContacted) strHelp += L"[←→] 기능   ";
 			strHelp += vecCand.empty() ? L"고를 수 있는 사람이 없습니다"
 									   : L"[↑↓] 고르기   [1~7] 바로 고르기   [Enter] " + std::wstring(szVerb);
 			break;
@@ -437,10 +483,70 @@ namespace MafiaClient
 		default: return;
 		}
 
-		if (m_eNightMode == NIGHT_MODE::FIND_JOB)	m_isFindJobUsed = true;
-		else										m_isSkillDone = true;
+		m_isSkillDone		= true;
+		m_iDoneSeat			= iSel;
+		if (m_eNightMode == NIGHT_MODE::CONTACT) m_tView.strDoneLabel = L"접선 시도 중";	/* 결과가 오면 성공 / 실패로 */
 		m_tView.isVoteDone	= true;
-		m_tView.strHelp		= (Night_Modes().empty()) ? L"" : L"[Tab] 모드 바꾸기";
+		m_tView.strHelp		= L"[Tab] 원탁 · 채팅 보기";
+		m_isDirty			= true;
+	}
+
+	ConsoleUI::RoomScreenView::NIGHT_SCENE CScene_Room::Night_Scene() const
+	{
+		using SCENE = ConsoleUI::RoomScreenView::NIGHT_SCENE;
+		if (!Is_Alive(m_iMySeat)) return SCENE::NONE;
+		switch (m_eJob)
+		{
+		case Protocol::JOB::MAFIA:		return SCENE::MAFIA;
+		case Protocol::JOB::BETRAYER:	return SCENE::BETRAYER;
+		case Protocol::JOB::MEDIUM:		return SCENE::MEDIUM;
+		case Protocol::JOB::SNOOP:		return SCENE::SNOOP;
+		case Protocol::JOB::PRESIDENT:	return SCENE::PRESIDENT;
+		case Protocol::JOB::BODYGUARD:	return SCENE::BODYGUARD;
+		default:						return SCENE::NONE;		/* 군인 : 밤에 할 일 없음 */
+		}
+	}
+
+	void CScene_Room::Show_SkillView()
+	{
+		m_tView.isSceneView	= true;
+		m_tView.isSeatList	= true;
+		for (NIGHT_MODE eMode : Night_Modes())
+			if (eMode != NIGHT_MODE::CHAT) { Apply_NightMode(eMode); return; }
+
+		/* 오늘 쓸 능력이 없음 : 장면 + 안내 (능력을 썼으면 고른 사람을 계속 표시) */
+		m_eNightMode		= NIGHT_MODE::NONE;
+		m_tView.isVoting	= m_isSkillDone && m_iDoneSeat >= 0;
+		m_tView.isVoteDone	= m_tView.isVoting;
+		m_tView.iVoteSel	= m_tView.isVoting ? m_iDoneSeat : ConsoleUI::RoomScreenView::VOTE_NONE;
+		m_tView.iPickMask	= 0;
+		m_tView.iSkillTab	= 0;
+		m_tView.strInput.clear();
+		m_tView.strInputLock = (m_eJob == Protocol::JOB::SNOOP && m_tView.iDay < 1) ? L"탐정은 둘째 밤부터 조사할 수 있습니다"
+							 : (m_eJob == Protocol::JOB::PRESIDENT && m_isSkillDone) ? L"공지를 보냈습니다. 아침까지 기다려 주세요"
+							 : L"오늘 밤 능력을 사용했습니다";
+		m_tView.strHelp		= L"[Tab] 원탁 · 채팅 보기";
+		m_isDirty			= true;
+	}
+
+	void CScene_Room::Toggle_NightView()
+	{
+		if (m_tView.eNightScene == ConsoleUI::RoomScreenView::NIGHT_SCENE::NONE) return;
+		if (!m_tView.isSceneView) { Show_SkillView(); return; }
+
+		m_tView.isSceneView	= false;
+		m_tView.isSeatList	= false;
+		const std::vector<NIGHT_MODE> vecModes = Night_Modes();
+		if (std::find(vecModes.begin(), vecModes.end(), NIGHT_MODE::CHAT) != vecModes.end())
+		{
+			Apply_NightMode(NIGHT_MODE::CHAT);
+			return;
+		}
+		m_eNightMode		= NIGHT_MODE::NONE;
+		m_tView.isVoting	= false;
+		m_tView.strInput.clear();
+		m_tView.strInputLock = L"밤에는 채팅을 칠 수 없습니다";
+		m_tView.strHelp		= L"[Tab] 능력 화면";
 		m_isDirty			= true;
 	}
 
@@ -453,6 +559,7 @@ namespace MafiaClient
 
 	void CScene_Room::On_JobData(const Net::Event& tEvent, Protocol::DATA_TYPE eType)
 	{
+		Sfx::Play(Sfx::ID::BLIP);
 		/* 자리 → "3번 민수" */
 		auto Seat_Name = [&](INT32 iSeat) -> std::wstring
 		{
@@ -497,6 +604,8 @@ namespace MafiaClient
 			}
 			else if (!tResult.isContact)			/* 배신자 직업 확인 */
 			{
+				m_isFindJobUsed = true;				/* 결과를 받아야 1회 소진 (서버가 거부하면 그대로) */
+				m_tView.isFindUsed = true;
 				m_tView.vecChats.push_back({ L"", L"🎭 " + Seat_Name(iSeat) + L" 님의 직업은 " + Job_Name(tResult.eJob) + L" 입니다", false, true });
 				Know_Job(iSeat, tResult.eJob);
 			}
@@ -505,10 +614,15 @@ namespace MafiaClient
 				m_isContacted = true;
 				m_tView.vecChats.push_back({ L"", L"🎭 접선 성공! " + Seat_Name(iSeat) + L" 님이 마피아입니다. 이제 밤에 같이 대화할 수 있습니다", false, true });
 				Know_Job(iSeat, Protocol::JOB::MAFIA);
-				if (m_ePhase == Protocol::GAME_PHASE::NIGHT) Apply_NightMode(NIGHT_MODE::CHAT);
+				m_tView.strSkillStatus = L"접선 완료 : " + Seat_Name(iSeat);	/* 능력 화면에 표시, Tab으로 밤 채팅 */
+				m_tView.strDoneLabel = L"접선 성공";
 			}
 			else
+			{
+				m_tView.strDoneLabel	= L"접선 실패";
+				m_tView.isDoneFail		= true;
 				m_tView.vecChats.push_back({ L"", L"🎭 접선 실패 : " + Seat_Name(iSeat) + L" 님은 마피아가 아닙니다", false, true });
+			}
 			break;
 		}
 		case Protocol::DATA_TYPE::PRESIDENT_NOTICE:
@@ -592,6 +706,17 @@ namespace MafiaClient
 		m_tView.isVoteTable		= (ePhase == Protocol::GAME_PHASE::VOTE || ePhase == Protocol::GAME_PHASE::LAST_VOTE);
 		m_tView.isSeatList		= (ePhase == Protocol::GAME_PHASE::NIGHT || ePhase == Protocol::GAME_PHASE::VOTE);	/* 밤 · 투표 : 원탁 대신 자리 목록 */
 		m_tView.iPickMask		= 0;
+		m_tView.eNightScene		= ConsoleUI::RoomScreenView::NIGHT_SCENE::NONE;
+		m_tView.isSceneView		= false;
+		m_tView.iSkillTab		= 0;
+		m_tView.strDoneLabel.clear();
+		m_tView.isDoneFail		= false;
+		m_tView.strTableWait	= (ePhase == Protocol::GAME_PHASE::LOADING_DAY) ? L"아침 기다리는 중" : (ePhase == Protocol::GAME_PHASE::LOADING_NIGHT) ? L"밤이 찾아오는 중" : L"";
+		m_tView.iSpotSeat		= (ePhase == Protocol::GAME_PHASE::ALLOCUTION || ePhase == Protocol::GAME_PHASE::LAST_VOTE) ? m_iAccusedSeat : -1;	/* 찬반까지 조명 화면 유지 */
+
+		if (ePhase == Protocol::GAME_PHASE::NIGHT)		Sfx::Play(Sfx::ID::NIGHT);
+		else if (ePhase == Protocol::GAME_PHASE::DAY)	Sfx::Play(Sfx::ID::DAY);
+		else if (ePhase == Protocol::GAME_PHASE::VOTE || ePhase == Protocol::GAME_PHASE::LAST_VOTE)	Sfx::Play(Sfx::ID::VOTE_START);
 
 		switch (ePhase)
 		{
@@ -617,6 +742,14 @@ namespace MafiaClient
 		case Protocol::GAME_PHASE::NIGHT:		/* 직업별 능력 막대 / 공지 / 마피아 채팅 (첫 모드부터) */
 		{
 			m_isSkillDone = false;
+			m_iDoneSeat = -1;
+			m_tView.eNightScene	= Night_Scene();
+			m_ullSceneStart		= GetTickCount64();
+			if (m_tView.eNightScene != ConsoleUI::RoomScreenView::NIGHT_SCENE::NONE)
+			{
+				Show_SkillView();
+				break;
+			}
 			const std::vector<NIGHT_MODE> vecModes = Night_Modes();
 			if (vecModes.empty())
 				m_tView.strInputLock	= (m_eJob == Protocol::JOB::SNOOP && m_tView.iDay < 1 && Is_Alive(m_iMySeat))
@@ -629,7 +762,10 @@ namespace MafiaClient
 		case Protocol::GAME_PHASE::LOADING_NIGHT:
 			m_tView.strInputLock	= L"지금은 채팅을 칠 수 없습니다";
 			break;
-		default: break;		/* DAY (토론) : 채팅 가능 */
+		case Protocol::GAME_PHASE::DAY:		/* 토론 : 채팅 가능 + 시간 조절 */
+			m_isTimeUsed		= false;
+			break;
+		default: break;
 		}
 
 		if (!Is_Alive(m_iMySeat))		/* 죽으면 단계와 상관없이 채팅 X (서버도 막음) */
@@ -674,16 +810,21 @@ namespace MafiaClient
 			{
 				tView.strRole	= Job_Role(m_eJob);	/* 내 직업 : 의자 위 (자리가 갱신돼도 유지) */
 				tView.isRoleRed	= Is_RedJob(m_eJob);
+				if (m_tView.isPlaying) { tView.eArt = Job_Art(m_eJob); tView.strIcon = Job_Icon(m_eJob); }
 			}
 			else if (m_arrKnownJob[i] != Protocol::JOB::UNKNOWN)	/* 능력으로 알아낸 직업 (영매 · 배신자 · 접선 · 군인 공개) */
 			{
 				tView.strRole	= Job_Role(m_arrKnownJob[i]);
 				tView.isRoleRed	= Is_RedJob(m_arrKnownJob[i]);
+				tView.eArt		= Job_Art(m_arrKnownJob[i]);
+				tView.strIcon	= Job_Icon(m_arrKnownJob[i]);
 			}
 			else if (m_arrKnownMafia[i] || m_arrKnownClean[i])		/* 탐정 결과 : 직업은 모름 */
 			{
 				tView.strRole	= m_arrKnownMafia[i] ? L"🔍 마피아" : L"🔍 무고";
 				tView.isRoleRed	= m_arrKnownMafia[i];
+				tView.eArt		= m_arrKnownMafia[i] ? ConsoleUI::SEAT_ART::MAFIA : ConsoleUI::SEAT_ART::CITIZEN;
+				tView.strIcon	= m_arrKnownMafia[i] ? L"🔪" : L"✅";
 			}
 			tView.isDead	= m_tView.isPlaying && !Is_Alive(static_cast<int>(i));
 		}
@@ -708,6 +849,14 @@ namespace MafiaClient
 		}
 	}
 
+	void CScene_Room::Update_TimeHelp()
+	{
+		std::wstring strHelp;
+		if (!m_isTimeUsed && Is_Alive(m_iMySeat))
+			strHelp = (GetTickCount64() + Protocol::TIME_SKIP_MIN_MS > m_ullPhaseEnd) ? L"[F2] 시간 추가" : L"[F1] 시간 스킵   [F2] 시간 추가";
+		if (strHelp != m_tView.strHelp) { m_tView.strHelp = strHelp; m_isDirty = true; }
+	}
+
 	void CScene_Room::Update_Countdown()
 	{
 		/* "5초 후 게임이 시작됩니다" → 4 → … (0초가 돼도 스스로 넘어가지 않음 : 서버의 S_TO_C_STARTGAME을 기다림) */
@@ -727,6 +876,14 @@ namespace MafiaClient
 		/* 이번 단계 남은 시간 표시 */
 		Update_PhaseTime();
 		Update_Death();
+		if (m_ePhase == Protocol::GAME_PHASE::DAY) Update_TimeHelp();
+
+		/* 밤 장면 애니메이션 */
+		if (m_tView.isSceneView)
+		{
+			const int iFrame = static_cast<int>((GetTickCount64() - m_ullSceneStart) / DEATH_FRAME_MS);
+			if (iFrame != m_tView.iSceneFrame) { m_tView.iSceneFrame = iFrame; m_isDirty = true; }
+		}
 	}
 
 	void CScene_Room::Update_Result()
@@ -738,7 +895,12 @@ namespace MafiaClient
 		const ULONGLONG ullNow = GetTickCount64();
 		if (m_ullWinStart == 0) m_ullWinStart = ullNow;
 		const int iFrame = (std::min)(static_cast<int>((ullNow - m_ullWinStart) / DEATH_FRAME_MS), ConsoleUI::RoomScreenView::WIN_FRAMES);	/* 끝 프레임 = 결과 창 */
-		if (iFrame != m_tView.iWinFrame) { m_tView.iWinFrame = iFrame; m_isDirty = true; }
+		if (iFrame != m_tView.iWinFrame)
+		{
+			if (m_tView.iWinFrame < 0) Sfx::Play(m_tView.isMafiaWin ? Sfx::ID::WIN_MAFIA : Sfx::ID::WIN_CITIZEN);
+			m_tView.iWinFrame = iFrame;
+			m_isDirty = true;
+		}
 	}
 
 	void CScene_Room::Update_Death()
@@ -753,7 +915,28 @@ namespace MafiaClient
 			m_isDirty			= true;
 			return;
 		}
-		if (iFrame != m_tView.iExecFrame) { m_tView.iExecFrame = iFrame; m_isDirty = true; }
+		if (iFrame != m_tView.iExecFrame)
+		{
+			m_tView.iExecFrame = iFrame;
+			m_isDirty = true;
+
+			/* 연출에 맞춘 소리 (프레임 번호는 ConsoleUI의 연출 순서) */
+			using FX = ConsoleUI::RoomScreenView::NIGHT_FX;
+			if (m_tView.eNightFx != FX::NONE)
+			{
+				if (iFrame == 4) Sfx::Play(Sfx::ID::GUN);		/* 탕 */
+				if (iFrame == 13) Sfx::Play(m_tView.eNightFx == FX::BLOCK ? Sfx::ID::TING : Sfx::ID::HIT);
+			}
+			else if (m_tView.isPardonFx)
+			{
+				if (iFrame == 8 || iFrame == 12) Sfx::Play(Sfx::ID::FLASH);
+			}
+			else
+			{
+				if (iFrame == 2) Sfx::Play(Sfx::ID::FLASH);		/* 찰칵 */
+				if (iFrame == 9) Sfx::Play(Sfx::ID::THUD);		/* 쾅 */
+			}
+		}
 	}
 
 	void CScene_Room::Apply_Phase(Protocol::GAME_PHASE ePhase, uint16_t iDay, uint32_t iRemainMs)
@@ -773,6 +956,13 @@ namespace MafiaClient
 		if (iRemainSec == m_iLastRemainSec) return;
 
 		m_iLastRemainSec = iRemainSec;
+
+		/* 10초부터 약한 삐 소리 (능력 · 토론 · 투표 · 변론 · 찬반만, 로딩 단계 X) */
+		const bool isTimed = m_ePhase == Protocol::GAME_PHASE::NIGHT || m_ePhase == Protocol::GAME_PHASE::DAY || m_ePhase == Protocol::GAME_PHASE::VOTE
+						  || m_ePhase == Protocol::GAME_PHASE::ALLOCUTION || m_ePhase == Protocol::GAME_PHASE::LAST_VOTE;
+		if (isTimed && iRemainSec > 0 && iRemainSec <= 10 && m_tView.iExecFrame < 0)
+			Sfx::Play(iRemainSec <= 3 ? Sfx::ID::COUNT_LAST : Sfx::ID::COUNT);
+
 		wchar_t wszTime[16]{};
 		swprintf_s(wszTime, L"%d : %02d", iRemainSec / 60, iRemainSec % 60);
 		m_tView.strSub = std::wstring(Phase_Name(m_ePhase)) + L"   " + wszTime;		/* 탁자 가운데 둘째 줄 : "투표   0 : 15" */
@@ -914,6 +1104,8 @@ namespace MafiaClient
 			m_iAccusedSeat = -1;
 			m_iAliveMask = 0x7F;		/* 시작은 전원 생존 (다음 CHANGEPHASE부터 서버 값) */
 			m_isFindJobUsed = m_isContacted = false;
+			m_tView.isFindUsed = false;
+			m_tView.strSkillStatus.clear();
 			m_tView.strPresident.clear();
 			m_arrKnownJob.fill(Protocol::JOB::UNKNOWN);
 			m_arrKnownMafia.fill(false);
@@ -1055,6 +1247,11 @@ namespace MafiaClient
 			m_iAliveMask	= 0x7F;
 			m_iAccusedSeat	= -1;
 			m_ullWinStart	= 0;				/* 연행 연출이 끝난 뒤 Update_Result가 시작 */
+			if (m_isFxPlaying && !m_tView.isPardonFx && m_tView.eNightFx == ConsoleUI::RoomScreenView::NIGHT_FX::NONE)
+			{
+				m_isFxPlaying		= false;		/* 투표로 게임이 끝남 : 연행 장면 없이 바로 승리 연출 */
+				m_tView.iExecFrame	= -1;
+			}
 			Set_State(STATE::RESULT);
 			Apply_RoomInfo();
 			break;
@@ -1083,7 +1280,32 @@ namespace MafiaClient
 				tChat.wszName[Protocol::MAX_NICNAME_BUF - 1] = L'\0';                // 끝 막기
 				tChat.wszText[Protocol::MAX_CHAT_BUF - 1] = L'\0';
 
-				m_tView.vecChats.push_back({ tChat.wszName, tChat.wszText, false , false });
+				/* 이름으로 자리를 찾아 자리 색 + "(나)" + 아는 직업 아이콘 (게임 중 이름 = "N번") */
+				ConsoleUI::ChatView tLine{ tChat.wszName, tChat.wszText, false, false };
+				for (int i = 0; i < static_cast<int>(m_tView.arrSeats.size()); ++i)
+				{
+					const ConsoleUI::SeatView& tSeat = m_tView.arrSeats[i];
+					if (tSeat.strName != tChat.wszName) continue;
+					tLine.iSeat		= i;
+					tLine.isMe		= tSeat.isMe;
+					if (tSeat.isMe) tLine.strName += L"(나)";
+					if (!tSeat.strIcon.empty()) tLine.strIcon = L" " + tSeat.strIcon;
+					break;
+				}
+				m_tView.vecChats.push_back(tLine);
+				m_isDirty = true;
+			}
+			/* 낮 시간 스킵 · 추가 : 남은 시간을 서버 값으로 다시 맞춤 */
+			else if (pData->eDataType == Protocol::DATA_TYPE::GAME_TIME)
+			{
+				if (tEvent.Get_BodyLen() != sizeof(Protocol::GAME_TIME)) break;
+				Protocol::GAME_TIME tTime{}; memcpy(&tTime, tEvent.Get_Body(), sizeof(tTime));
+				Sfx::Play(Sfx::ID::BLIP);
+				if (tTime.iSeat < 0 || tTime.iSeat >= Protocol::MAX_ROOM_PLAYER) break;
+				m_ullPhaseEnd		= GetTickCount64() + tTime.iRemainMs;
+				m_iLastRemainSec	= -1;
+				const std::wstring strTime = std::to_wstring(Protocol::TIME_ADJUST_MS / 1000) + L"초 ";
+				m_tView.vecChats.push_back({ L"", m_tView.arrSeats[tTime.iSeat].strName + L" 님이 시간을 " + strTime + (tTime.isAdd ? L"늘렸습니다" : L"줄였습니다"), false, true });
 				m_isDirty = true;
 			}
 			/* 누가 한 표 넣을 때마다 : 로그 + 그 의자 아래에 표 수 (단계 바뀌면 Apply_RoomInfo가 지움) */
@@ -1091,6 +1313,7 @@ namespace MafiaClient
 			{
 				if (tEvent.Get_BodyLen() != sizeof(Protocol::GAME_VOTE)) break;
 				Protocol::GAME_VOTE tVote{}; memcpy(&tVote, tEvent.Get_Body(), sizeof(tVote));
+				Sfx::Play(Sfx::ID::VOTE_TICK);
 
 				if (tVote.iVoteSeat >= 0 && tVote.iVoteSeat < static_cast<INT32>(m_tView.arrSeats.size()))
 				{
@@ -1105,6 +1328,7 @@ namespace MafiaClient
 			{
 				if (tEvent.Get_BodyLen() != sizeof(Protocol::GAME_LASTVOTE)) break;
 				Protocol::GAME_LASTVOTE tLast{}; memcpy(&tLast, tEvent.Get_Body(), sizeof(tLast));
+				Sfx::Play(Sfx::ID::VOTE_TICK);
 				m_tView.vecChats.push_back({ L"", tLast.is ? L"찬성 한 표가 나왔습니다" : L"반대 한 표가 나왔습니다", false, true });
 				++(tLast.is ? m_iAgree : m_iDisagree);
 				m_tView.strTally = L"찬성 " + std::to_wstring(m_iAgree) + L"   반대 " + std::to_wstring(m_iDisagree);	/* 탁자 가운데 */

@@ -232,6 +232,25 @@ namespace MafiaServer
 		return nullptr;
 	}
 
+	const wchar_t* CRoom::Adjust_Time(Net::ClientKey iKey, bool isAdd, ULONGLONG ullNow)
+	{
+		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return L"게임 중이 아님";
+		const int iSeat = Find_Seat(iKey);
+		if (m_pLogic->Adjust_Time(iSeat, isAdd, ullNow) == false) return L"시간 조절 거부 (낮이 아님 · 오늘 이미 사용 · 죽은 사람 · 남은 시간 10초 미만 스킵)";
+
+		Protocol::GAME_TIME tData{};
+		tData.eDataType = Protocol::DATA_TYPE::GAME_TIME;
+		tData.iSeat		= iSeat;
+		tData.isAdd		= isAdd;
+		tData.iRemainMs	= static_cast<uint32_t>(m_pLogic->Get_Remain(ullNow));
+		for (auto Key : m_arrayPlayerClientKeys)
+		{
+			if (Key == Net::NONE_CLIENTKEY) continue;
+			m_pServerApp->Send_Packet(Key, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, &tData, sizeof(tData));
+		}
+		return nullptr;
+	}
+
 	const wchar_t* CRoom::LastVote(Net::ClientKey iVoterKey, bool is)
 	{
 		if (m_eCurState != CRoom::STATE::GAME || m_pLogic == nullptr) return L"게임 중이 아님";

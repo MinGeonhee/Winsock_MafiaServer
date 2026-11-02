@@ -13,6 +13,7 @@ namespace MafiaServer
 		{
 			bool		    isAlive{ true };						/* 현재 살았는지 */
 			bool		    isUsePhaseAbility{ true };				/* 능력을 사용했는지 안했는지 */
+			bool		    isUseTime{ false };						/* 오늘 낮 시간 스킵 · 추가를 썼는지 */
 			INT32		    iVoteSeat{Protocol::NONE_VOTE};			/* 이자리가 투표한 자리 -1일시 아직 투표를 진행하지 않음*/
 			Protocol::JOB   eJob{ Protocol::JOB::CITIZEN};			/* 직업 */
 		public:
@@ -98,6 +99,7 @@ namespace MafiaServer
 		/* VOTE 단계에 iVoter 자리가 iTarget 자리에 투표 (-1 = 무효표). 다시 오면 덮어씀. 자기 자신 · 죽은 사람 · 빈자리는 거부 */
 		bool							Vote(INT32 iVoter, INT32 iTarget);
 		bool							LastVote(INT32 iVoter, bool isAgree);
+		bool							Adjust_Time(INT32 iSeat, bool isAdd, ULONGLONG ullNow);	/* 낮 시간 스킵 · 추가 (한 사람 하루 1번, 스킵은 남은 시간 10초 이상일 때만) */
 
 		/* 각 직업별로 능력사용처리 : tAction은 받은 버퍼라 값만 꺼내 저장 (크기 검사는 CServerApp에서 끝난 상태)
 		   반환 : nullptr = 받아들임, 아니면 버린 이유 (서버 로그용) */
