@@ -277,6 +277,7 @@ namespace MafiaClient
 		if (tKey.wVirtualKeyCode == VK_RETURN)
 		{
 			if (m_tView.iVoteSel == ConsoleUI::RoomScreenView::VOTE_NONE) { Show_Notice(L"먼저 번호를 고르세요"); return false; }
+			Sfx::Play(Sfx::ID::MOVE);		/* 확정 소리 : 결과가 안 오는 직업도 눌렀다는 걸 알 수 있게 */
 			return true;
 		}
 
@@ -1280,6 +1281,15 @@ namespace MafiaClient
 				m_tView.iExecFrame	= -1;
 			}
 			Set_State(STATE::RESULT);
+			if (tEnd.isSkipFx)						/* 누가 나가서 끝남 : 연출 없이 바로 결과 창 */
+			{
+				m_isFxPlaying		= false;
+				m_tView.iExecFrame	= -1;
+				m_tView.eNightFx	= ConsoleUI::RoomScreenView::NIGHT_FX::NONE;
+				m_tView.isPardonFx	= false;
+				m_tView.iWinFrame	= ConsoleUI::RoomScreenView::WIN_FRAMES;
+				m_ullWinStart		= 1;
+			}
 			Apply_RoomInfo();
 			break;
 		}
@@ -1335,6 +1345,27 @@ namespace MafiaClient
 				m_iLastRemainSec	= -1;
 				const std::wstring strTime = std::to_wstring(Protocol::TIME_ADJUST_MS / 1000) + L"초 ";
 				m_tView.vecChats.push_back({ L"", m_tView.arrSeats[tTime.iSeat].strName + L" 님이 시간을 " + strTime + (tTime.isAdd ? L"늘렸습니다" : L"줄였습니다"), false, true });
+				m_isDirty = true;
+			}
+			/* 게임 중 누가 나감 : 사망 표시, 고르던 대상이면 다른 후보로 */
+			else if (pData->eDataType == Protocol::DATA_TYPE::PLAYER_LEFT)
+			{
+				if (tEvent.Get_BodyLen() != sizeof(Protocol::PLAYER_LEFT)) break;
+				Protocol::PLAYER_LEFT tLeft{}; memcpy(&tLeft, tEvent.Get_Body(), sizeof(tLeft));
+				if (tLeft.iSeat < 0 || tLeft.iSeat >= Protocol::MAX_ROOM_PLAYER) break;
+				Sfx::Play(Sfx::ID::BLIP);
+				m_iAliveMask = tLeft.iAliveMask;
+				m_tView.vecChats.push_back({ L"", std::to_wstring(tLeft.iSeat + 1) + L"번 님이 게임을 나갔습니다", false, true });
+				if (m_tView.isVoting && !m_tView.isVoteDone)
+				{
+					const std::vector<int> vecCand = (m_ePhase == Protocol::GAME_PHASE::VOTE) ? Vote_Candidates() : Night_Candidates();
+					m_tView.iPickMask = 0;
+					for (int iSeat : vecCand)
+						if (iSeat >= 0) m_tView.iPickMask |= static_cast<uint8_t>(1u << iSeat);
+					if (m_tView.iVoteSel == tLeft.iSeat)
+						m_tView.iVoteSel = vecCand.empty() ? ConsoleUI::RoomScreenView::VOTE_NONE : vecCand.front();
+				}
+				Apply_RoomInfo();
 				m_isDirty = true;
 			}
 			/* 누가 한 표 넣을 때마다 : 로그 + 그 의자 아래에 표 수 (단계 바뀌면 Apply_RoomInfo가 지움) */

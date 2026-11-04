@@ -127,7 +127,8 @@ namespace Protocol
 		MEDIUM_RESULT,			// 영매 결과 (본인만)
 		BETRAYER_RESULT,		// 배신자 확인 · 접촉 결과 (본인만)
 		PRESIDENT_NOTICE,		// 대통령 공지 (방 전원)
-		GAME_TIME,				// 낮 시간 스킵 · 추가 (방 전원)
+		GAME_TIME,				// 낮 시간 스킵, 추가 (방 전원)
+		PLAYER_LEFT,			// 게임 중 누가 나감 : 자리 + 생존 비트 (방 전원)
 		END
 	};
 

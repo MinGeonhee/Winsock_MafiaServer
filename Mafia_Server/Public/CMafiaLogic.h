@@ -98,6 +98,7 @@ namespace MafiaServer
 
 		void							Kill(INT32 iSeat, INT32 iKillerSeat);
 		void							Arrest(INT32 iSeat);
+		void							Leave(INT32 iSeat, ULONGLONG ullNow);	/* 게임 중 나감 : 사망 처리 → 승패 판정, 지목된 사람이면 변론과 찬반을 건너뜀 */
 		Protocol::ENDGAME_RESULT		Judge_EndGame();
 		INT32							Get_SeatVoteCount(INT32 iSeat) const;			/* iSeat자리가 투표받은 숫자 */
 		INT32							Get_ExecutedSeat() const { return m_iExecutedSeat; }

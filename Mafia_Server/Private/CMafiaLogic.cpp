@@ -149,6 +149,32 @@ namespace MafiaServer
 		m_arraySeatInfo[iSeat]->isArrested = true;
 	}
 
+	void CMafiaLogic::Leave(INT32 iSeat, ULONGLONG ullNow)
+	{
+		if (!Check_SeatRange(iSeat) || m_arraySeatInfo[iSeat]->isAlive == false) return;
+		m_arraySeatInfo[iSeat]->isAlive = false;
+
+		/* 나간 사람을 고른 습격과 표는 없던 일로 (집계에서 죽은 사람이 지목되지 않게) */
+		if (m_tUseSkillData.iMafiaKillTarget == iSeat) m_tUseSkillData.iMafiaKillTarget = Protocol::NONE_SEAT;
+		if (m_eCurPhase == Protocol::GAME_PHASE::VOTE)
+			for (Seat_Info* pSeat : m_arraySeatInfo)
+				if (pSeat && pSeat->iVoteSeat == iSeat) pSeat->iVoteSeat = Protocol::NONE_VOTE;
+
+		m_eEndGameResult = Judge_EndGame();
+		if (m_eEndGameResult != Protocol::ENDGAME_RESULT::NONE)
+		{
+			Start_Phase(Protocol::GAME_PHASE::GAME_RESULT, ullNow);
+			return;
+		}
+
+		/* 지목된 사람이 나감 : 변론과 찬반을 건너뛰고 밤으로 */
+		if ((m_eCurPhase == Protocol::GAME_PHASE::ALLOCUTION || m_eCurPhase == Protocol::GAME_PHASE::LAST_VOTE) && m_iAccusedSeat == iSeat)
+		{
+			m_iAccusedSeat = -1;
+			Start_Phase(Protocol::GAME_PHASE::LOADING_NIGHT, ullNow);
+		}
+	}
+
 	/* Game End 조건 */
 	Protocol::ENDGAME_RESULT CMafiaLogic::Judge_EndGame()
 	{

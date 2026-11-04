@@ -443,7 +443,10 @@ namespace MafiaServer
 
 		m_pPlayerManager->Set_PlayerRoom(iClientKey, 0);
 
-		Broadcast_RoomMembers(iRoomKey, Net::NONE_CLIENTKEY);		/* 남은 사람들에게 (나간 사람은 이미 빠짐) */
+		/* 게임 중엔 자리를 그대로 둠 (닉네임이 드러나지 않게). 게임이 끝날 때 End_Game이 알림 */
+		const CRoom* pRoom = m_pRoomManager->Find_Room(iRoomKey);
+		if (pRoom == nullptr || !pRoom->Is_InGame())
+			Broadcast_RoomMembers(iRoomKey, Net::NONE_CLIENTKEY);	/* 남은 사람들에게 (나간 사람은 이미 빠짐) */
 		m_pMainServer->Add_CustomLog(iClientKey, L"방 나감 (#" + std::to_wstring(iRoomKey) + L")");
 		m_isDirty = true;
 	}

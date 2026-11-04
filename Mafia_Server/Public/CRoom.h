@@ -47,6 +47,7 @@ namespace MafiaServer
 		Protocol::ROOM_KEY Get_Key()				const { return m_iRoomKey; }
 		uint16_t		   Get_CurPlayerNum()		const { return m_iCurPlayerNum; }
 		bool			   Get_IsPlaying()			const;
+		bool			   Is_InGame()				const { return m_pLogic != nullptr; }	/* 카운트다운 제외, 실제 게임 중 */
 		Net::ClientKey	   Get_MasterKey()			const { return m_iRoomMasterClientKey; }
 		/* 자리 7칸 (인덱스 = 자리 번호 - 1, 빈자리 = NONE_CLIENTKEY) */
 		const std::array<Net::ClientKey, Protocol::MAX_ROOM_PLAYER>& Get_PlayerKeys() const { return m_arrayPlayerClientKeys; }
@@ -95,7 +96,8 @@ namespace MafiaServer
 		void			Send_ChangePhase(ULONGLONG uillNow);
 		void			Send_VoteResult();						/* VOTE 끝 : 지목된 자리 방 전원에게 */
 		void			Send_LastVoteResult();					/* VOTE 끝 : 지목된 자리 방 전원에게 */
-		void			End_Game();								/* GAME_RESULT : 이긴 팀 + 직업 공개 전송 → 게임 정리 → 대기로 */
+		void			End_Game(bool isSkipFx = false);		/* GAME_RESULT : 이긴 팀 + 직업 공개 전송 → 게임 정리 → 대기로 */
+		void			On_PlayerLeft(int iSeat);				/* 게임 중 나감 : 로직 처리 → 방 전원에게 알림 → 승패, 단계 변경 전송 */
 		int				Find_Seat(Net::ClientKey iKey) const;	/* 없으면 -1 */
 		void			Start_Game(ULONGLONG ullNow);		/* 로딩 끝 : 게임 상태 + 게임 로직 생성 */
 	public:

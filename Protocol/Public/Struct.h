@@ -164,6 +164,7 @@ namespace Protocol
 		JOB             arrJobs[MAX_ROOM_PLAYER]{};     /* 자리별 직업 공개 (빈자리 = UNKNOWN) */
 		uint8_t         iAliveMask{ 0 };                /* 마지막 생존 상태 (결과 창에 ☠ 표시용) */
 		uint8_t         iArrestMask{ 0 };               /* 연행된 자리 (결과 창에 연행 표시용) */
+		bool            isSkipFx{ false };              /* 누가 나가서 끝남 : 승리 연출 없이 바로 결과 창 */
 	};
 
 	/* 방 자리 바뀜 : 방장 + 자리 7칸 (빈자리는 iKey 0) */
@@ -254,6 +255,12 @@ namespace Protocol
 		INT32			iSeat{};
 		bool			isAdd{ false };
 		uint32_t		iRemainMs{};
+	};
+
+	struct PLAYER_LEFT : PROVIDE_DATA
+	{
+		INT32			iSeat{ NONE_SEAT };
+		uint8_t			iAliveMask{ 0 };
 	};
 
 	struct GAME_LASTVOTE : PROVIDE_DATA
