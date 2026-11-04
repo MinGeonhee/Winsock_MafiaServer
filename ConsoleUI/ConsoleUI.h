@@ -1278,9 +1278,9 @@ namespace ConsoleUI
 					const wchar_t* szRow = isWinner ? WHITE : GRAY;
 					const int iCol = iBoxW / 2 - 16;
 					Put(r, iCol, !tRow.strRole.empty() ? tRow.strRole : (tRow.isMafia ? L"🔪 마피아" : L"👤 시민"), isWinner ? (tRow.isMafia ? RED : GREEN) : GRAY);
-					Put(r, iCol + 12, Fit(tRow.strName, 12), szRow);
-					if (tRow.isMe)   Put(r, iCol + 25, L"(나)", L"\x1b[1;94m");
-					if (tRow.isDead) Put(r, iCol + 30, tRow.isArrested ? L"연행" : L"사망", GRAY);
+					Put(r, iCol + 12, Fit(tRow.strName, 16), szRow);		/* "N번 " 4칸 + 한글 닉네임 6글자 12칸 */
+					if (tRow.isMe)   Put(r, iCol + 29, L"(나)", L"\x1b[1;94m");
+					if (tRow.isDead) Put(r, iCol + 34, tRow.isArrested ? L"연행" : L"사망", GRAY);
 					r += 1;
 				}
 				Center(iBoxH - 3, L"[Enter] 대기실로 돌아가기", GRAY);

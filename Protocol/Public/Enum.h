@@ -7,8 +7,8 @@ namespace Protocol
 	using		ROOM_KEY = uint64_t;
 	constexpr	ROOM_KEY NONE_ROOMKEY = 0;
 
-	/* 닉네임 제한 길이 10글자 */
-	constexpr size_t MAX_NICKNAME_LEN  = 10;
+	/* 닉네임 제한 길이 6글자 */
+	constexpr size_t MAX_NICKNAME_LEN  = 6;
 	constexpr size_t MAX_NICNAME_BUF   = 16;
 	constexpr size_t MAX_ONLINE_PLAYER = 20;     // 한 패킷에 담는 최대 인원
 
