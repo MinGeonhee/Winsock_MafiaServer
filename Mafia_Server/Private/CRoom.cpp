@@ -159,6 +159,8 @@ namespace MafiaServer
 	{
 		if (iExitPlayerClientKey == Net::NONE_CLIENTKEY) return;
 
+		const int iLeftSeat = Find_Seat(iExitPlayerClientKey);
+
 		/* 방에서 제외 (방에 없는 키면 아무것도 안 함) */
 		bool isFound{ false };
 		for (auto& Key : m_arrayPlayerClientKeys)
@@ -174,6 +176,24 @@ namespace MafiaServer
 
 		if (iExitPlayerClientKey == m_iRoomMasterClientKey)
 			Change_Master();
+
+		if (m_pLogic != nullptr) On_PlayerLeft(iLeftSeat);
+	}
+
+	void CRoom::On_PlayerLeft(int iSeat)
+	{
+		const ULONGLONG ullNow = GetTickCount64();
+		const Protocol::GAME_PHASE ePrev = m_pLogic->Get_Phase();
+		m_pLogic->Leave(iSeat, ullNow);
+
+		Protocol::PLAYER_LEFT tData{};
+		tData.eDataType		= Protocol::DATA_TYPE::PLAYER_LEFT;
+		tData.iSeat			= iSeat;
+		tData.iAliveMask	= m_pLogic->Get_AliveMask();
+		Send_ToAll(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, &tData, sizeof(tData));
+
+		if (m_pLogic->Get_Phase() == Protocol::GAME_PHASE::GAME_RESULT) { End_Game(true); return; }
+		if (m_pLogic->Get_Phase() != ePrev) Send_ChangePhase(ullNow);
 	}
 
 	const wchar_t* CRoom::Chatting(const SYSTEMTIME& tTime, Net::ClientKey iChatterKey, const std::wstring& wstrText,Net::CServer* pMainServer)
@@ -187,8 +207,9 @@ namespace MafiaServer
 
 		/* 게임 중 : 단계 규칙상 못 치는 사람의 채팅은 버림 (클라도 막지만 서버가 최종 판단) */
 		const bool isGame = (m_eCurState == CRoom::STATE::GAME && m_pLogic);
-		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return L"지금 단계엔 채팅 불가 (밤 · 투표 · 사망 등)";
-		const bool isMafiaOnly = isGame && m_pLogic->Get_Phase() == Protocol::GAME_PHASE::NIGHT;	/* 밤 채팅은 마피아만 받음 */
+		if (isGame && !m_pLogic->Can_Chat(Find_Seat(iChatterKey))) return L"지금 단계엔 채팅 불가 (밤, 투표 등)";
+		const bool isDeadChat  = isGame && m_pLogic->Is_Dead(Find_Seat(iChatterKey));				/* 죽은 사람 채팅은 죽은 사람만 받음 */
+		const bool isMafiaOnly = isGame && !isDeadChat && m_pLogic->Get_Phase() == Protocol::GAME_PHASE::NIGHT;	/* 밤 채팅은 마피아만 받음 */
 
 		m_pChatting->Chatting(tTime,iChatterKey,wstrText);
 		/* 추후 채팅을 실패했을 경우에 실패 메세지 따로 첨부 */
@@ -201,6 +222,7 @@ namespace MafiaServer
 		const std::wstring strName = isGame ? std::to_wstring(Find_Seat(iChatterKey) + 1) + L"번" : pPlayer->Get_Nickname();	/* 게임 중엔 이름 대신 자리 번호 */
 		wcsncpy_s(tChat.wszName, strName.c_str(), _TRUNCATE);
 		wcsncpy_s(tChat.wszText, wstrText.c_str(), _TRUNCATE);
+		tChat.isDeadChat = isDeadChat;
 
 		/* 발송 */
 		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
@@ -208,6 +230,7 @@ namespace MafiaServer
 			const Net::ClientKey Key = m_arrayPlayerClientKeys[i];
 			if (Key == Net::NONE_CLIENTKEY) continue;
 			if (isMafiaOnly && !m_pLogic->Is_NightChatMember(i)) continue;
+			if (isDeadChat && !m_pLogic->Is_Dead(i)) continue;
 			pMainServer->Send_Packet(Key, static_cast<uint16_t>(Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA),tChat);
 		}
 		return nullptr;
@@ -326,16 +349,18 @@ namespace MafiaServer
 		}
 	}
 
-	void CRoom::End_Game()
+	void CRoom::End_Game(bool isSkipFx)
 	{
 		Protocol::S_TO_C_GAME_END tBody{};
 		tBody.eWinner		= m_pLogic->Get_Winner();
 		tBody.iAliveMask	= m_pLogic->Get_AliveMask();
+		tBody.iArrestMask	= m_pLogic->Get_ArrestMask();
+		tBody.isSkipFx		= isSkipFx;
 		for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
 		{
-			if (m_arrayPlayerClientKeys[i] == Net::NONE_CLIENTKEY) continue;
-			tBody.arrJobs[i]		= m_pLogic->Get_Job(i);
-			m_arrViewingResult[i]	= true;		/* 결과 창 확인 전엔 F5 막기 */
+			tBody.arrJobs[i] = m_pLogic->Get_Job(i);		/* 나간 사람 직업도 공개 */
+			if (m_arrayPlayerClientKeys[i] != Net::NONE_CLIENTKEY)
+				m_arrViewingResult[i] = true;				/* 결과 창 확인 전엔 F5 막기 */
 		}
 		for (auto Key : m_arrayPlayerClientKeys)
 		{
@@ -344,7 +369,8 @@ namespace MafiaServer
 		}
 
 		m_pLogic.reset();							/* 게임 정리 */
-		m_eCurState = CRoom::STATE::WATING;			/* 다시 입장 · F5 가능 */
+		m_eCurState = CRoom::STATE::WATING;			/* 다시 입장, F5 가능 */
+		m_pServerApp->Broadcast_RoomMembers(m_iRoomKey, Net::NONE_CLIENTKEY);	/* 게임 중 나간 사람을 이제 자리에서 뺌 */
 	}
 
 	void CRoom::SendPacket_All(Protocol::PACKET_TYPE tType, const void* pBody, uint16_t tBodyLen  ,Net::CServer* pMainServer) const
@@ -380,6 +406,7 @@ namespace MafiaServer
 		tBody.iDay		= m_pLogic->Get_Day();
 		tBody.iRemainMs	= m_pLogic->Get_Remain(uillNow);
 		tBody.iAliveMask = m_pLogic->Get_AliveMask();
+		tBody.iArrestMask = m_pLogic->Get_ArrestMask();
 
 		for (auto Key : m_arrayPlayerClientKeys)
 		{

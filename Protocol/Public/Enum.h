@@ -7,8 +7,8 @@ namespace Protocol
 	using		ROOM_KEY = uint64_t;
 	constexpr	ROOM_KEY NONE_ROOMKEY = 0;
 
-	/* 닉네임 제한 길이 10글자 */
-	constexpr size_t MAX_NICKNAME_LEN  = 10;
+	/* 닉네임 제한 길이 6글자 */
+	constexpr size_t MAX_NICKNAME_LEN  = 6;
 	constexpr size_t MAX_NICNAME_BUF   = 16;
 	constexpr size_t MAX_ONLINE_PLAYER = 20;     // 한 패킷에 담는 최대 인원
 
@@ -39,9 +39,9 @@ namespace Protocol
 		UNKNOWN = 0,	// 모름 (클라 : 아직 직업을 받기 전)
 		MAFIA,			// 마피아 => 밤마다 한명을 찾아서 죽일 수 있음
 		PRESIDENT,		// 대통령 => 투표로 연행되지 않음 + 찬반 2표
-		SNOOP,			// 탐정	  => 밤마다 한명을 지정해 조사할 수 있음 단, 직업은 모르며 해당 인원이 마피아인지 아닌지만 알 수 있음
+		SNOOP,			// 탐정	  => 밤마다 하나만 : 산 사람이 마피아인지 조사 또는 연행된 사람의 직업 조사
 		BODYGUARD,		// 경호원  => 밤마다 한명을 지정하여 방어가능
-		MEDIUM,			// 영매	  => 밤마다 죽은 사람 한명의 직업 확인
+		MEDIUM,			// 영매	  => 밤마다 사망자(마피아에게 죽은 사람) 한명의 직업 확인, 연행된 사람은 불가
 		SOLDIER,		// 군인	  => 마피아 공격을 1회 버팀
 		BETRAYER,		// 배신자  => 밤에 단 1회 다른 플레이어의 직업 확인가능, 매일 마피아와의 접촉 시도 가능
 		CITIZEN,		// 시민 (덱엔 없음)
@@ -127,7 +127,8 @@ namespace Protocol
 		MEDIUM_RESULT,			// 영매 결과 (본인만)
 		BETRAYER_RESULT,		// 배신자 확인 · 접촉 결과 (본인만)
 		PRESIDENT_NOTICE,		// 대통령 공지 (방 전원)
-		GAME_TIME,				// 낮 시간 스킵 · 추가 (방 전원)
+		GAME_TIME,				// 낮 시간 스킵, 추가 (방 전원)
+		PLAYER_LEFT,			// 게임 중 누가 나감 : 자리 + 생존 비트 (방 전원)
 		END
 	};
 

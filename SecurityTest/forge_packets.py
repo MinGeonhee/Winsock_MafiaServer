@@ -44,7 +44,7 @@ def bot(name):
 
 def act(b, room, job, target=0, real_len=True, extra=b''):
     body = struct.pack('<QH', room, job) + struct.pack('<i', target)
-    if job == J['BETRAYER']: body += b'\0'
+    if job in (J['BETRAYER'], J['SNOOP']): body += b'\0'
     if job == J['PRESIDENT']: body = struct.pack('<QH', room, job) + wstr(extra.decode() if extra else '', 128)
     if not real_len: body = body[:-2]
     b.send(P['C_JOB_ACTION'], body)

@@ -12,6 +12,7 @@ namespace MafiaServer
 		struct Seat_Info
 		{
 			bool		    isAlive{ true };						/* 현재 살았는지 */
+			bool		    isArrested{ false };					/* 투표로 연행됐는지 (false인데 죽었으면 사망) */
 			bool		    isUsePhaseAbility{ true };				/* 능력을 사용했는지 안했는지 */
 			bool		    isUseTime{ false };						/* 오늘 낮 시간 스킵 · 추가를 썼는지 */
 			INT32		    iVoteSeat{Protocol::NONE_VOTE};			/* 이자리가 투표한 자리 -1일시 아직 투표를 진행하지 않음*/
@@ -75,12 +76,20 @@ namespace MafiaServer
 				if (m_arraySeatInfo[i] && m_arraySeatInfo[i]->isAlive) iMask |= static_cast<uint8_t>(1u << i);
 			return iMask;
 		}
+		uint8_t					Get_ArrestMask() const								/* 비트 i = i번 자리 연행됨 */
+		{
+			uint8_t iMask = 0;
+			for (int i = 0; i < Protocol::MAX_ROOM_PLAYER; ++i)
+				if (m_arraySeatInfo[i] && m_arraySeatInfo[i]->isArrested) iMask |= static_cast<uint8_t>(1u << i);
+			return iMask;
+		}
 		bool					Is_Mafia(INT32 iSeat) const { return Get_Job(iSeat) == Protocol::JOB::MAFIA; }	/* 밤 채팅 · 처치 */
 		bool					Is_MafiaTeam(INT32 iSeat) const													/* 승패 판정 (배신자 포함) */
 		{
 			const Protocol::JOB eJob = Get_Job(iSeat);
 			return eJob == Protocol::JOB::MAFIA || eJob == Protocol::JOB::BETRAYER;
 		}
+		bool					Is_Dead(INT32 iSeat) const { return Check_SeatRange(iSeat) && m_arraySeatInfo[iSeat]->isAlive == false; }
 		bool					Is_NightChatMember(INT32 iSeat) const											/* 밤 채팅 : 마피아 + 접선한 배신자 */
 		{
 			return Is_Mafia(iSeat) || (m_tUseSkillData.isBetRayerFindMafia && Get_Job(iSeat) == Protocol::JOB::BETRAYER);
@@ -89,6 +98,7 @@ namespace MafiaServer
 
 		void							Kill(INT32 iSeat, INT32 iKillerSeat);
 		void							Arrest(INT32 iSeat);
+		void							Leave(INT32 iSeat, ULONGLONG ullNow);	/* 게임 중 나감 : 사망 처리 → 승패 판정, 지목된 사람이면 변론과 찬반을 건너뜀 */
 		Protocol::ENDGAME_RESULT		Judge_EndGame();
 		INT32							Get_SeatVoteCount(INT32 iSeat) const;			/* iSeat자리가 투표받은 숫자 */
 		INT32							Get_ExecutedSeat() const { return m_iExecutedSeat; }

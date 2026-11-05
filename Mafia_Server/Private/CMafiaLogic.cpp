@@ -97,7 +97,7 @@ namespace MafiaServer
 	bool CMafiaLogic::Can_Chat(int iSeat) const
 	{
 		if (!Check_SeatRange(iSeat)) return false;
-		if (m_arraySeatInfo[iSeat]->isAlive == false) return false;	/* 죽은 사람은 못 침 */
+		if (m_arraySeatInfo[iSeat]->isAlive == false) return true;	/* 죽은 사람끼리는 언제나 (받는 사람도 죽은 사람만, CRoom::Chatting) */
 
 		switch (m_eCurPhase)
 		{
@@ -146,6 +146,33 @@ namespace MafiaServer
 		/* Seat 범위 체크 */
 		if (Check_SeatRange(iSeat) == false) return;
 		m_arraySeatInfo[iSeat]->isAlive = false;
+		m_arraySeatInfo[iSeat]->isArrested = true;
+	}
+
+	void CMafiaLogic::Leave(INT32 iSeat, ULONGLONG ullNow)
+	{
+		if (!Check_SeatRange(iSeat) || m_arraySeatInfo[iSeat]->isAlive == false) return;
+		m_arraySeatInfo[iSeat]->isAlive = false;
+
+		/* 나간 사람을 고른 습격과 표는 없던 일로 (집계에서 죽은 사람이 지목되지 않게) */
+		if (m_tUseSkillData.iMafiaKillTarget == iSeat) m_tUseSkillData.iMafiaKillTarget = Protocol::NONE_SEAT;
+		if (m_eCurPhase == Protocol::GAME_PHASE::VOTE)
+			for (Seat_Info* pSeat : m_arraySeatInfo)
+				if (pSeat && pSeat->iVoteSeat == iSeat) pSeat->iVoteSeat = Protocol::NONE_VOTE;
+
+		m_eEndGameResult = Judge_EndGame();
+		if (m_eEndGameResult != Protocol::ENDGAME_RESULT::NONE)
+		{
+			Start_Phase(Protocol::GAME_PHASE::GAME_RESULT, ullNow);
+			return;
+		}
+
+		/* 지목된 사람이 나감 : 변론과 찬반을 건너뛰고 밤으로 */
+		if ((m_eCurPhase == Protocol::GAME_PHASE::ALLOCUTION || m_eCurPhase == Protocol::GAME_PHASE::LAST_VOTE) && m_iAccusedSeat == iSeat)
+		{
+			m_iAccusedSeat = -1;
+			Start_Phase(Protocol::GAME_PHASE::LOADING_NIGHT, ullNow);
+		}
 	}
 
 	/* Game End 조건 */
@@ -338,22 +365,26 @@ namespace MafiaServer
 			break;
 #pragma endregion
 		}
-		case Protocol::JOB::SNOOP:	/* 탐정 : 마피아인지만 → 본인에게 */
+		case Protocol::JOB::SNOOP:	/* 탐정 : 마피아인지 또는 연행자 직업 → 본인에게 */
 		{
 #pragma region 탐정
-			const INT32 iTargetSeat = static_cast<const Protocol::SNOOP_ACTION&>(tAction).tTarget.iSeat;
+			const Protocol::SNOOP_ACTION& tSnoopAction = static_cast<const Protocol::SNOOP_ACTION&>(tAction);
+			const INT32 iTargetSeat = tSnoopAction.tTarget.iSeat;
 			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)						return L"밤이 아님";
-			if (m_iDay < 1)														return L"탐정은 첫날 밤 조사 불가";	/* 첫날 밤(0일차)엔 조사 불가 : 둘째 밤부터 */
-			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)		return L"잘못된 대상 (범위 밖 · 자기 자신)";
-			if (m_arraySeatInfo[iTargetSeat]->isAlive == false)					return L"죽은 사람은 대상이 될 수 없음";
+			if (m_iDay < 1)														return L"탐정은 첫날 밤 조사 불가";	/* 0일차 밤엔 조사 불가 : 1일차 밤부터 */
+			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)		return L"잘못된 대상 (범위 밖, 자기 자신)";
+			if (tSnoopAction.isArrested && !m_arraySeatInfo[iTargetSeat]->isArrested)		return L"연행되지 않은 사람의 직업은 조사 불가";
+			if (!tSnoopAction.isArrested && m_arraySeatInfo[iTargetSeat]->isAlive == false)	return L"죽은 사람은 대상이 될 수 없음";
 			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)					return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
 
-			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;
+			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;	/* 마피아 조사, 연행자 조사 중 하나만 */
 
 			Protocol::SNOOP_RESULT tResult{};
 			tResult.eDataType		= Protocol::DATA_TYPE::SNOOP_RESULT;
 			tResult.tTarget.iSeat	= iTargetSeat;
-			tResult.isMafia			= Is_Mafia(iTargetSeat);		/* 배신자는 마피아로 안 나옴 */
+			tResult.isArrested		= tSnoopAction.isArrested;
+			if (tSnoopAction.isArrested)	tResult.eJob = m_arraySeatInfo[iTargetSeat]->eJob;
+			else							tResult.isMafia = Is_Mafia(iTargetSeat);		/* 배신자는 마피아로 안 나옴 */
 			m_pRoom->Send_ToSeat(iUseSeat, Protocol::PACKET_TYPE::S_TO_C_PROVIDE_DATA, tResult);
 			return nullptr;
 #pragma endregion
@@ -373,7 +404,7 @@ namespace MafiaServer
 			return nullptr;
 #pragma endregion
 		}
-		case Protocol::JOB::MEDIUM:		/* 영매 : 죽은 사람 직업 → 본인에게 */
+		case Protocol::JOB::MEDIUM:		/* 영매 : 사망자 직업 → 본인에게 (연행자는 탐정 몫) */
 		{
 #pragma region 영매사
 
@@ -381,6 +412,7 @@ namespace MafiaServer
 			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)			return L"밤이 아님";
 			if (!Check_SeatRange(iTargetSeat))						return L"잘못된 대상 (범위 밖 · 빈자리)";
 			if (m_arraySeatInfo[iTargetSeat]->isAlive)				return L"영매는 죽은 사람만";	/* 죽은 사람만 */
+			if (m_arraySeatInfo[iTargetSeat]->isArrested)			return L"영매는 연행된 사람 불가";
 			if (m_arraySeatInfo[iUseSeat]->isUsePhaseAbility)		return L"이번 밤 이미 사용";	/* 이번 밤 이미 씀 */
 
 			m_arraySeatInfo[iUseSeat]->isUsePhaseAbility = true;

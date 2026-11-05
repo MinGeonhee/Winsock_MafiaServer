@@ -55,18 +55,18 @@ namespace Sfx
 				Make({ { 330.f, 260, .7f, false }, { 247.f, 420, .7f, false } }),													/* NIGHT : 낮게 떨어지는 종 */
 				Make({ { 523.f, 90, .6f, false }, { 659.f, 90, .6f, false }, { 784.f, 180, .6f, false } }),							/* DAY : 올라가는 세 음 */
 				Make({ { 660.f, 90, .6f, false }, { 0.f, 40, 0.f, false }, { 660.f, 130, .6f, false } }),							/* VOTE_START */
-				Make({ { 988.f, 55, .55f, false } }),																				/* VOTE_TICK : 누가 표를 넣을 때 */
+				Make({ { 988.f, 120, .55f, false } }),																				/* VOTE_TICK : 누가 표를 넣을 때 */
 				Make({ { 0.f, 170, 1.f, true } }),																					/* GUN */
 				Make({ { 2093.f, 60, .6f, false }, { 2637.f, 170, .5f, false } }),													/* TING : 경호원이 막음 */
-				Make({ { 0.f, 70, .9f, true }, { 110.f, 170, .9f, false } }),														/* HIT : 쓰러짐 · 군인 버팀 */
+				Make({ { 0.f, 70, .9f, true }, { 110.f, 170, .9f, false } }),														/* HIT : 쓰러짐, 군인 버팀 */
 				Make({ { 90.f, 160, 1.f, false } }),																				/* THUD : 도장 */
 				Make({ { 0.f, 45, .6f, true }, { 0.f, 40, 0.f, false }, { 0.f, 45, .6f, true } }),									/* FLASH : 카메라 */
 				Make({ { 392.f, 170, .7f, false }, { 311.f, 170, .7f, false }, { 262.f, 170, .7f, false }, { 196.f, 420, .7f, false } }),	/* WIN_MAFIA */
 				Make({ { 523.f, 110, .6f, false }, { 659.f, 110, .6f, false }, { 784.f, 110, .6f, false }, { 1047.f, 380, .6f, false } }),	/* WIN_CITIZEN */
-				Make({ { 1319.f, 45, .5f, false }, { 1760.f, 70, .5f, false } }),													/* BLIP : 결과 · 시간 조절 알림 */
+				Make({ { 1319.f, 45, .5f, false }, { 1760.f, 70, .5f, false } }),													/* BLIP : 결과, 시간 조절 알림 */
 				Make({ { 988.f, 45, .7f, false }, { 1319.f, 75, .7f, false } }),																				/* MOVE : 대상 고르기 */
-				Make({ { 880.f, 45, .22f, false } }),																				/* COUNT : 10초부터 매초 약하게 */
-				Make({ { 1175.f, 40, .28f, false }, { 0.f, 70, 0.f, false }, { 1175.f, 40, .28f, false } }),						/* COUNT_LAST : 마지막 3초는 삐삐 */
+				Make({ { 880.f, 120, .22f, false } }),																				/* COUNT : 10초부터 매초 약하게 */
+				Make({ { 1175.f, 90, .28f, false }, { 0.f, 50, 0.f, false }, { 1175.f, 90, .28f, false } }),						/* COUNT_LAST : 마지막 3초는 삐삐 */
 			};
 			return SOUNDS[static_cast<size_t>(eId)];
 		}

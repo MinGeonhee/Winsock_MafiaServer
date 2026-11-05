@@ -47,7 +47,7 @@ namespace MafiaClient
 		bool	Key_Pick(const KEY_EVENT_RECORD& tKey, const std::vector<int>& vecCand);	/* 막대 고르기 공용 (←→ · 숫자) : Enter로 확정하면 true */
 
 		/* 밤 능력 : 고르기 · 보내기만 (판정은 서버). [Tab] 으로 능력 화면 ↔ 원탁 · 채팅 */
-		enum class NIGHT_MODE { NONE, KILL, SNOOP, GUARD, MEDIUM, FIND_JOB, CONTACT, NOTICE, CHAT };
+		enum class NIGHT_MODE { NONE, KILL, SNOOP, SNOOP_ARREST, GUARD, MEDIUM, FIND_JOB, CONTACT, NOTICE, CHAT };
 		std::vector<NIGHT_MODE> Night_Modes() const;			/* 지금 쓸 수 있는 모드 (직업 · 이번 밤 사용 여부) */
 		std::vector<int>		Night_Candidates() const;		/* 지금 모드로 고를 수 있는 자리 */
 		void	Key_Night(const KEY_EVENT_RECORD& tKey);
@@ -59,6 +59,7 @@ namespace MafiaClient
 		void	On_JobData(const Net::Event& tEvent, Protocol::DATA_TYPE eType);	/* 능력 결과 · 대통령 공지 */
 		void	Know_Job(int iSeat, Protocol::JOB eJob);		/* 알아낸 직업 → 의자 위 */
 		bool	Is_Alive(int iSeat) const { return iSeat >= 0 && (m_iAliveMask >> iSeat) & 1; }
+		bool	Is_Arrested(int iSeat) const { return iSeat >= 0 && (m_iArrestMask >> iSeat) & 1; }
 
 		/* 상태별 업데이트 */
 		void	Update_Countdown();								/* 5, 4, 3 … 알림 */
@@ -98,6 +99,7 @@ namespace MafiaClient
 		int							m_iLastRemainSec{ -1 };	/* 마지막으로 그린 남은 초 */
 		int							m_iMySeat{ -1 };		/* 내 자리 (0 ~ 6, Apply_RoomInfo에서) */
 		int							m_iAccusedSeat{ -1 };	/* 투표로 지목된 자리 (최후 변론자, -1 = 없음) */
+		uint8_t						m_iArrestMask{ 0 };		/* 비트 i = i번 자리 연행됨 (CHANGEPHASE로 갱신) */
 		uint8_t						m_iAliveMask{ 0x7F };	/* 비트 i = i번 자리 생존 (CHANGEPHASE로 갱신, 시작은 전원 생존) */
 		int							m_iAgree{ 0 };			/* 찬반 중계로 센 찬성 (탁자 표시용) */
 		int							m_iDisagree{ 0 };
