@@ -75,7 +75,7 @@ namespace MafiaClient
 			{
 			case Protocol::JOB::MAFIA:		return L"밤마다 한 명을 처치합니다";
 			case Protocol::JOB::PRESIDENT:	return L"투표로 연행되지 않고, 밤마다 방 전원에게 공지를 남길 수 있습니다";
-			case Protocol::JOB::SNOOP:		return L"둘째 밤부터 밤마다 하나만 : 마피아인지 조사 또는 연행자 직업 조사";
+			case Protocol::JOB::SNOOP:		return L"1일차 밤부터 밤마다 하나만 : 마피아인지 조사 또는 연행자 직업 조사";
 			case Protocol::JOB::BODYGUARD:	return L"밤마다 한 명을 마피아로부터 지킵니다";
 			case Protocol::JOB::MEDIUM:		return L"밤마다 사망자 한 명의 직업을 봅니다 (연행자는 볼 수 없음)";
 			case Protocol::JOB::SOLDIER:	return L"마피아의 공격을 한 번 버팁니다";
@@ -539,7 +539,7 @@ namespace MafiaClient
 		m_tView.iPickMask	= 0;
 		m_tView.iSkillTab	= 0;
 		m_tView.strInput.clear();
-		m_tView.strInputLock = (m_eJob == Protocol::JOB::SNOOP && m_tView.iDay < 1) ? L"탐정은 둘째 밤부터 조사할 수 있습니다"
+		m_tView.strInputLock = (m_eJob == Protocol::JOB::SNOOP && m_tView.iDay < 1) ? L"탐정은 1일차 밤부터 조사할 수 있습니다"
 							 : (m_eJob == Protocol::JOB::PRESIDENT && m_isSkillDone) ? L"공지를 보냈습니다. 아침까지 기다려 주세요"
 							 : L"오늘 밤 능력을 사용했습니다";
 		m_tView.strHelp		= L"[Tab] 원탁 · 채팅 보기";
@@ -776,7 +776,7 @@ namespace MafiaClient
 			const std::vector<NIGHT_MODE> vecModes = Night_Modes();
 			if (vecModes.empty())
 				m_tView.strInputLock	= (m_eJob == Protocol::JOB::SNOOP && m_tView.iDay < 1 && Is_Alive(m_iMySeat))
-										? L"탐정은 둘째 밤부터 조사할 수 있습니다" : L"밤에는 채팅을 칠 수 없습니다";
+										? L"탐정은 1일차 밤부터 조사할 수 있습니다" : L"밤에는 채팅을 칠 수 없습니다";
 			else
 				Apply_NightMode(vecModes.front());
 			break;

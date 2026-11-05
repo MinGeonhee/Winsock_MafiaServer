@@ -371,7 +371,7 @@ namespace MafiaServer
 			const Protocol::SNOOP_ACTION& tSnoopAction = static_cast<const Protocol::SNOOP_ACTION&>(tAction);
 			const INT32 iTargetSeat = tSnoopAction.tTarget.iSeat;
 			if (m_eCurPhase != Protocol::GAME_PHASE::NIGHT)						return L"밤이 아님";
-			if (m_iDay < 1)														return L"탐정은 첫날 밤 조사 불가";	/* 첫날 밤(0일차)엔 조사 불가 : 둘째 밤부터 */
+			if (m_iDay < 1)														return L"탐정은 첫날 밤 조사 불가";	/* 0일차 밤엔 조사 불가 : 1일차 밤부터 */
 			if (!Check_SeatRange(iTargetSeat) || iTargetSeat == iUseSeat)		return L"잘못된 대상 (범위 밖, 자기 자신)";
 			if (tSnoopAction.isArrested && !m_arraySeatInfo[iTargetSeat]->isArrested)		return L"연행되지 않은 사람의 직업은 조사 불가";
 			if (!tSnoopAction.isArrested && m_arraySeatInfo[iTargetSeat]->isAlive == false)	return L"죽은 사람은 대상이 될 수 없음";
